@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Review{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Review</h1>
+  <form method="post" action="{% url 'ledger:review_rematch' %}">
+    {% csrf_token %}
+    <button class="btn" type="submit">Re-run matching</button>
+  </form>
+</div>
+<p class="muted">Imported rows land here when no tracked fund or category rule matched. Add the fund or a rule, then re-run matching, or assign rows by hand.</p>
+
+{% if suggestions %}
+<section class="card">
+  <h2>Worktag IDs found in unassigned rows</h2>
+  <ul class="suggestions">
+    {% for s in suggestions %}
+    <li>
+      <code>{{ s.code }}</code> {% if s.name %}<span>{{ s.name }}</span>{% endif %}
+      <span class="muted small">{{ s.count }} row{{ s.count|pluralize }}</span>
+      <a class="btn btn-small" href="{% url 'ledger:fund_create' %}?code={{ s.code|urlencode }}&amp;type={{ s.type|urlencode }}&amp;name={{ s.name|urlencode }}">Track as fund</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form method="post" action="{% url 'ledger:transactions_bulk' %}" class="card flush" data-bulk>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{% url 'ledger:review' %}">
+  <h2 class="card-title">No fund ({{ unassigned_count }})</h2>
+  {% if unassigned %}
+  {% include "ledger/partials/bulk_bar.html" %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th class="check"></th><th>Date</th><th>Description</th><th>Worktags in file</th><th>Category</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for t in unassigned %}
+        <tr>
+          <td class="check"><input type="checkbox" name="ids" value="{{ t.pk }}" aria-label="Select"></td>
+          <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
+          <td>{{ t.description|default:t.raw_category|default:"—"|truncatechars:70 }}</td>
+          <td class="small pre">{{ t.raw_worktags|default:"—"|truncatechars:140 }}</td>
+          <td>{{ t.category.name|default:"—" }}</td>
+          <td class="num nowrap {{ t.amount|neg_class }}">{{ t.amount|money_cents }}</td>
+          <td class="row-actions"><a href="{% url 'ledger:transaction_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="card-body muted">All transactions have a fund.</p>{% endif %}
+</form>
+
+<form method="post" action="{% url 'ledger:transactions_bulk' %}" class="card flush" data-bulk>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{% url 'ledger:review' %}">
+  <h2 class="card-title">No category ({{ uncategorized_count }})</h2>
+  {% if uncategorized %}
+  {% include "ledger/partials/bulk_bar.html" %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th class="check"></th><th>Date</th><th>Fund</th><th>Description</th><th>Category in file</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for t in uncategorized %}
+        <tr>
+          <td class="check"><input type="checkbox" name="ids" value="{{ t.pk }}" aria-label="Select"></td>
+          <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
+          <td><a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.code }}</a></td>
+          <td>{{ t.description|default:"—"|truncatechars:70 }}</td>
+          <td>{{ t.raw_category|default:"—" }}</td>
+          <td class="num nowrap {{ t.amount|neg_class }}">{{ t.amount|money_cents }}</td>
+          <td class="row-actions"><a href="{% url 'ledger:transaction_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="card-body small muted">Tip: add a keyword rule under <a href="{% url 'ledger:settings' %}#rules">Settings</a> so future imports get categorized automatically.</p>
+  {% else %}<p class="card-body muted">All transactions with a fund have a category.</p>{% endif %}
+</form>
+{% endblock %}

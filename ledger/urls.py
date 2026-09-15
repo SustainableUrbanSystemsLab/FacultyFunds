@@ -1,0 +1,43 @@
+from django.urls import path
+
+from .views import funds, imports, pending, people, settings, transactions
+
+app_name = "ledger"
+
+urlpatterns = [
+    path("", funds.dashboard, name="dashboard"),
+    path("funds/new/", funds.fund_form, name="fund_create"),
+    path("funds/<int:pk>/", funds.fund_detail, name="fund_detail"),
+    path("funds/<int:pk>/edit/", funds.fund_form, name="fund_edit"),
+    path("funds/<int:pk>/delete/", funds.fund_delete, name="fund_delete"),
+    path("funds/<int:pk>/export.csv", funds.fund_export, name="fund_export"),
+    path("transactions/", transactions.transaction_list, name="transactions"),
+    path("transactions/new/", transactions.transaction_form, name="transaction_create"),
+    path("transactions/bulk/", transactions.transactions_bulk, name="transactions_bulk"),
+    path("transactions/<int:pk>/edit/", transactions.transaction_form, name="transaction_edit"),
+    path("transactions/<int:pk>/delete/", transactions.transaction_delete, name="transaction_delete"),
+    path("review/", transactions.review, name="review"),
+    path("review/rematch/", transactions.review_rematch, name="review_rematch"),
+    path("pending/", pending.pending_list, name="pending"),
+    path("pending/new/", pending.pending_form, name="pending_create"),
+    path("pending/<int:pk>/edit/", pending.pending_form, name="pending_edit"),
+    path("pending/<int:pk>/delete/", pending.pending_delete, name="pending_delete"),
+    path("pending/<int:pk>/reconcile/", pending.pending_reconcile, name="pending_reconcile"),
+    path("people/", people.people_list, name="people"),
+    path("people/new/", people.person_create, name="person_create"),
+    path("people/<int:pk>/", people.person_detail, name="person_detail"),
+    path("people/<int:pk>/delete/", people.person_delete, name="person_delete"),
+    path("people/<int:pk>/merge/", people.person_merge, name="person_merge"),
+    path("appointments/new/", people.appointment_form, name="appointment_create"),
+    path("appointments/<int:pk>/edit/", people.appointment_form, name="appointment_edit"),
+    path("appointments/<int:pk>/delete/", people.appointment_delete, name="appointment_delete"),
+    path("imports/", imports.imports_index, name="imports"),
+    path("imports/upload/", imports.import_upload, name="import_upload"),
+    path("imports/<int:pk>/map/", imports.import_map, name="import_map"),
+    path("imports/<int:pk>/preview/", imports.import_preview, name="import_preview"),
+    path("imports/<int:pk>/commit/", imports.import_commit, name="import_commit"),
+    path("imports/<int:pk>/cancel/", imports.import_cancel, name="import_cancel"),
+    path("imports/<int:pk>/undo/", imports.import_undo, name="import_undo"),
+    path("settings/", settings.settings_page, name="settings"),
+    path("settings/profiles/<int:pk>/delete/", imports.profile_delete, name="profile_delete"),
+]

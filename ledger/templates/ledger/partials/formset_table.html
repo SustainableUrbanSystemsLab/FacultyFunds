@@ -1,0 +1,25 @@
+<form method="post" action="{% url 'ledger:settings' %}">
+  {% csrf_token %}
+  <input type="hidden" name="which" value="{{ which }}">
+  {{ formset.management_form }}
+  {% if formset.non_form_errors %}<div class="form-error">{% for e in formset.non_form_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+  <div class="table-wrap">
+    <table class="table table-edit">
+      <thead><tr>{% for field in formset.empty_form.visible_fields %}<th>{{ field.label }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for form in formset %}
+        <tr>
+          {% for field in form.visible_fields %}
+            <td>{% if forloop.first %}{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}{% endif %}{{ field }}{% if field.help_text and field.field.disabled %}<div class="sub">{{ field.help_text }}</div>{% endif %}{% for e in field.errors %}<div class="error small">{{ e }}</div>{% endfor %}</td>
+          {% endfor %}
+        </tr>
+        {% if form.non_field_errors %}<tr><td colspan="9" class="error small">{{ form.non_field_errors|join:" " }}</td></tr>{% endif %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card-body actions">
+    <button class="btn btn-primary" type="submit">Save</button>
+    <span class="small muted">Use the empty last row to add one. Tick “Delete” to remove.</span>
+  </div>
+</form>

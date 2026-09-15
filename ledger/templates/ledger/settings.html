@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Settings</h1></div>
+
+<section class="card flush" id="person_types">
+  <h2 class="card-title">Person types: fringe and tuition</h2>
+  <p class="card-body small muted">
+    The defaults come from Georgia Tech's FY2025 schedules: fringe is 31.7% for full benefits, 23.9% for limited benefits, 7.9% for graduate student health insurance, and 1.5% for partial benefits. Tuition remission (GSTRP) is $1,596 per month.
+    Confirm the current rates with your grants office and update them here. Projections use these for anyone without an override on their appointment.
+  </p>
+  {% include "ledger/partials/formset_table.html" with formset=person_type_formset which="person_types" %}
+</section>
+
+<section class="card flush" id="categories">
+  <h2 class="card-title">Budget categories</h2>
+  <p class="card-body small muted">
+    “Subject to F&amp;A” marks categories in the MTDC base that F&amp;A is charged on. Equipment, tuition remission, and participant support are normally excluded. Built-in categories can be renamed but not deleted.
+  </p>
+  {% include "ledger/partials/formset_table.html" with formset=category_formset which="categories" %}
+</section>
+
+<section class="card flush" id="rules">
+  <h2 class="card-title">Category rules</h2>
+  <p class="card-body small muted">
+    Imported rows get a category from the first rule whose keywords appear in the file's category or account column, then in the description. Lower priority numbers are checked first.
+    Separate keywords with commas. End a keyword with * to match the start of a word, e.g. <code>5161*</code>. Saving re-checks uncategorized transactions.
+  </p>
+  {% include "ledger/partials/formset_table.html" with formset=rule_formset which="rules" %}
+</section>
+
+<section class="card">
+  <h2>Saved column mappings</h2>
+  <p class="muted">{{ profiles|length }} saved mapping{{ profiles|length|pluralize }}. Manage them on the <a href="{% url 'ledger:imports' %}">Import</a> page.</p>
+</section>
+{% endblock %}

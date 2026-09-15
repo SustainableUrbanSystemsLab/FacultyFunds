@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Import{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Import</h1></div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Upload a report</h2>
+    <form method="post" action="{% url 'ledger:import_upload' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      {% include "partials/form_fields.html" %}
+      <button class="btn btn-primary" type="submit">Upload and preview</button>
+    </form>
+    <p class="small muted">Nothing is saved until you confirm the preview. Names and employee IDs are replaced with initials and a keyed hash as soon as the file is read; the file itself is never stored.</p>
+  </section>
+  <section class="card">
+    <h2>What to export</h2>
+    <ul class="tight">
+      <li><strong>Workday:</strong> an expense report list or expense lines report (e.g., <em>Find Expense Reports</em>, or a report with a Worktags column) → Export to Excel.</li>
+      <li><strong>OneUSG Connect:</strong> Manager Self Service → Commitment Accounting reports such as <em>Payroll Expenses Detail</em> → download to Excel or CSV. PeopleSoft “Excel” files that are really web pages work too.</li>
+      <li><strong>Anything else:</strong> any spreadsheet with a date and amount per row, or one column per month.</li>
+    </ul>
+    <p class="small muted">The first time you import a layout, you'll match columns. The mapping is saved and reused automatically for files with the same columns.</p>
+  </section>
+</div>
+
+<section class="card flush">
+  <h2 class="card-title">Recent imports</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>File</th><th>Type</th><th>Uploaded</th><th>Status</th><th class="num">Rows imported</th><th></th></tr></thead>
+      <tbody>
+      {% for b in batches %}
+        <tr>
+          <td><a href="{% if b.status == 'staged' %}{% url 'ledger:import_map' b.pk %}{% else %}{% url 'ledger:import_preview' b.pk %}{% endif %}">{{ b.filename }}</a></td>
+          <td>{{ b.get_source_display }}</td>
+          <td class="nowrap">{{ b.created_at|date:"M j, Y H:i" }}</td>
+          <td><span class="badge badge-{{ b.status }}">{{ b.get_status_display }}</span></td>
+          <td class="num">{{ b.stats.created|default:"—" }}</td>
+          <td class="row-actions">{% if b.status == 'committed' %}<a href="{% url 'ledger:transactions' %}?batch={{ b.pk }}">Rows</a>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted">No imports yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if profiles %}
+<section class="card flush">
+  <h2 class="card-title">Saved column mappings</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Name</th><th>Type</th><th>Last used</th><th></th></tr></thead>
+      <tbody>
+      {% for p in profiles %}
+        <tr>
+          <td>{{ p.name }}</td>
+          <td>{{ p.get_source_display }}</td>
+          <td>{{ p.last_used_at|date:"M j, Y"|default:"—" }}</td>
+          <td class="row-actions">
+            <form method="post" action="{% url 'ledger:profile_delete' p.pk %}">{% csrf_token %}<button class="linklike" type="submit" data-confirm="Delete this saved mapping?">Delete</button></form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

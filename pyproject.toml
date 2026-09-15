@@ -1,0 +1,18 @@
+[project]
+name = "facultybudget"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "argon2-cffi>=25.1.0",
+    "defusedxml>=0.7.1",
+    "dj-database-url>=3.1.2",
+    "django>=5.2,<5.3",
+    "django-axes>=8.3.1",
+    "django-otp>=1.7.3",
+    "gunicorn>=26.2.0",
+    "openpyxl>=3.1.5",
+    "psycopg[binary]>=3.3.5",
+    "qrcode>=8.2",
+    "whitenoise>=6.12.0",
+    "xlrd>=2.0.2",
+]

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Funds{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Funds</h1>
+  <div class="actions">
+    <a class="btn" href="{% url 'ledger:imports' %}">Import report</a>
+    <a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">Add fund</a>
+  </div>
+</div>
+
+{% if global_alerts or fund_alerts %}
+<section class="alerts" aria-label="Alerts">
+  {% for alert in global_alerts %}<a class="alert alert-{{ alert.level }}" href="{{ alert.url }}">{{ alert.message }}</a>{% endfor %}
+  {% for alert in fund_alerts %}<a class="alert alert-{{ alert.level }}" href="{% url 'ledger:fund_detail' alert.worktag.pk %}"><strong>{{ alert.worktag.code }}</strong> {{ alert.message }}</a>{% endfor %}
+</section>
+{% endif %}
+
+{% if groups %}
+<div class="kpis">
+  <div class="kpi"><span>Total budget</span><strong>{{ grand.budget|money }}</strong></div>
+  <div class="kpi"><span>Spent</span><strong>{{ grand.actual|money }}</strong></div>
+  <div class="kpi"><span>Pending + planned</span><strong>{{ grand.committed|money }}</strong></div>
+  <div class="kpi"><span>Projected left</span><strong class="{{ grand.projected_remaining|neg_class }}">{{ grand.projected_remaining|money }}</strong></div>
+</div>
+
+{% for label, summaries in groups %}
+<section class="card flush">
+  <h2 class="card-title">{{ label }}{{ summaries|length|pluralize }}</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Fund</th><th>Ends</th><th class="num">Budget</th><th class="num">Spent</th>
+          <th class="num">Pending + planned</th><th class="num">Projected left</th><th class="bar-col">Used</th>
+          <th class="num">Burn / mo</th><th class="num">Runway</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in summaries %}
+        {% with t=s.total w=s.worktag %}
+        <tr{% if not w.is_active %} class="row-muted"{% endif %}>
+          <td><a href="{% url 'ledger:fund_detail' w.pk %}"><strong>{{ w.code }}</strong></a><div class="sub">{{ w.name }}</div></td>
+          <td class="nowrap">{% if w.end_date %}{{ w.end_date|date:"M j, Y" }}{% if s.days_left is not None and s.days_left >= 0 %}<div class="sub">{{ s.days_left }} days</div>{% endif %}{% else %}—{% endif %}</td>
+          <td class="num">{{ t.budget|money }}</td>
+          <td class="num">{{ t.actual|money }}</td>
+          <td class="num">{{ t.committed|money }}</td>
+          <td class="num {{ t.projected_remaining|neg_class }}">{{ t.projected_remaining|money }}</td>
+          <td class="bar-col">{% include "ledger/partials/bar.html" with line=t %}</td>
+          <td class="num">{{ s.burn_rate|money }}</td>
+          <td class="num nowrap">{{ s.runway_months|runway }}</td>
+        </tr>
+        {% endwith %}
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+<p class="small muted">
+  {% if show_all %}<a href="?">Hide inactive funds</a>{% elif inactive_count %}<a href="?show=all">Show {{ inactive_count }} inactive fund{{ inactive_count|pluralize }}</a>{% endif %}
+</p>
+{% else %}
+<section class="card empty">
+  <h2>Start by adding a fund</h2>
+  <p>Add each grant, gift, cost center, project, or program you track, with its Workday worktag ID and budget. Then import Workday expense reports and OneUSG payroll worksheets.</p>
+  <p><a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">Add fund</a></p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Import{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Import</p>
+    <h1>{{ batch.filename }}</h1>
+    <p class="muted">{{ batch.get_source_display }} · <span class="badge badge-{{ batch.status }}">{{ batch.get_status_display }}</span>{% if batch.committed_at %} · {{ batch.committed_at|date:"M j, Y H:i" }}{% endif %}</p>
+  </div>
+  <div class="actions">
+    {% if batch.status == 'committed' %}
+      <a class="btn" href="{% url 'ledger:transactions' %}?batch={{ batch.pk }}">View rows</a>
+      <form method="post" action="{% url 'ledger:import_undo' batch.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit" data-confirm="Remove everything this import added?">Undo import</button>
+      </form>
+    {% endif %}
+    <a class="btn btn-primary" href="{% url 'ledger:imports' %}">Import another</a>
+  </div>
+</div>
+
+{% if batch.stats %}
+{% with s=batch.stats %}
+<div class="kpis">
+  <div class="kpi"><span>{% if s.import_as == 'pending' %}Pending entries{% else %}Transactions{% endif %} added</span><strong>{{ s.created }}</strong><small>{{ s.total|money_cents }}</small></div>
+  <div class="kpi"><span>Duplicates skipped</span><strong>{{ s.duplicates }}</strong></div>
+  <div class="kpi"><span>Without fund</span><strong>{{ s.no_fund|add:s.skipped_no_fund }}</strong>{% if s.no_fund %}<small><a href="{% url 'ledger:review' %}">Review</a></small>{% endif %}</div>
+  <div class="kpi"><span>Without category</span><strong>{{ s.no_category }}</strong></div>
+  <div class="kpi"><span>New people</span><strong>{{ s.new_people }}</strong>{% if s.new_people %}<small><a href="{% url 'ledger:people' %}">Set their type</a></small>{% endif %}</div>
+</div>
+{% if s.skipped %}<p class="small muted">Skipped: {% for reason, count in s.skipped.items %}{{ reason }} ({{ count }}){% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+{% if s.skipped_no_fund %}<p class="notice notice-warn small">{{ s.skipped_no_fund }} pending rows weren't imported because no fund matched.</p>{% endif %}
+{% endwith %}
+{% endif %}
+{% endblock %}

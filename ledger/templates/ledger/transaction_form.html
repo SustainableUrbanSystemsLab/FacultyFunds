@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{% if txn %}Edit transaction{% else %}Add transaction{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{% if txn %}Edit transaction{% else %}Add manual transaction{% endif %}</h1></div>
+<section class="card">
+  {% if txn and txn.batch_id %}
+  <dl class="facts">
+    <dt>Imported from</dt><dd><a href="{% url 'ledger:import_preview' txn.batch_id %}">{{ txn.get_source_display }}</a></dd>
+    {% if txn.raw_worktags %}<dt>Worktags in file</dt><dd class="pre">{{ txn.raw_worktags }}</dd>{% endif %}
+    {% if txn.raw_category %}<dt>Category in file</dt><dd>{{ txn.raw_category }}</dd>{% endif %}
+    {% if txn.raw_status %}<dt>Status in file</dt><dd>{{ txn.raw_status }}</dd>{% endif %}
+  </dl>
+  {% elif not txn %}
+  <p class="muted">For spending that won't appear in an import, such as an opening balance for spending before you started tracking.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% include "partials/form_fields.html" %}
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-ghost" href="{{ next|default:'/transactions/' }}">Cancel</a>
+      {% if txn %}<a class="btn btn-danger push-right" href="{% url 'ledger:transaction_delete' txn.pk %}?next={{ next|urlencode }}">Delete</a>{% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}

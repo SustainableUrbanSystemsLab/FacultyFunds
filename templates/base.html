@@ -1,0 +1,42 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Faculty Budget{% endblock %} · Faculty Budget</title>
+  <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <script src="{% static 'js/app.js' %}" defer></script>
+</head>
+<body>
+{% if user.is_authenticated and user.is_verified %}
+  <header class="topbar">
+    <a class="brand" href="{% url 'ledger:dashboard' %}">Faculty Budget</a>
+    {% with n=request.resolver_match.url_name|default:"" %}
+    <nav class="mainnav" aria-label="Main">
+      <a href="{% url 'ledger:dashboard' %}"{% if n == 'dashboard' or 'fund' in n %} aria-current="page"{% endif %}>Funds</a>
+      <a href="{% url 'ledger:review' %}"{% if n == 'review' %} aria-current="page"{% endif %}>Review{% if nav_review_count %} <span class="count">{{ nav_review_count }}</span>{% endif %}</a>
+      <a href="{% url 'ledger:transactions' %}"{% if 'transaction' in n %} aria-current="page"{% endif %}>Transactions</a>
+      <a href="{% url 'ledger:pending' %}"{% if 'pending' in n %} aria-current="page"{% endif %}>Pending</a>
+      <a href="{% url 'ledger:people' %}"{% if 'person' in n or 'people' in n or 'appointment' in n %} aria-current="page"{% endif %}>People</a>
+      <a href="{% url 'ledger:imports' %}"{% if 'import' in n %} aria-current="page"{% endif %}>Import{% if nav_staged_count %} <span class="count">{{ nav_staged_count }}</span>{% endif %}</a>
+      <a href="{% url 'ledger:settings' %}"{% if 'setting' in n or 'profile' in n %} aria-current="page"{% endif %}>Settings</a>
+    </nav>
+    {% endwith %}
+    <div class="usermenu">
+      <a href="{% url 'accounts:security' %}">Security</a>
+      <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit" class="linklike">Sign out</button></form>
+    </div>
+  </header>
+{% endif %}
+<main class="{% block main_class %}container{% endblock %}">
+  {% if messages %}
+    <ul class="messages">
+      {% for message in messages %}<li class="msg msg-{{ message.tags|default:'info' }}">{{ message }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

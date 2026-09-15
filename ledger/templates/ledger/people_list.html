@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}People{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>People</h1>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'ledger:person_create' %}">Add person</a></div>
+</div>
+<p class="muted">Names and employee IDs from imports are never stored. Each person gets an alias (initials by default) linked to a keyed hash, so later imports recognize them. Rename aliases freely. The person type sets the fringe rate and default tuition.</p>
+
+<section class="card flush">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Alias</th><th>Type</th><th class="num">Fringe</th><th class="num">Appointments</th><th class="num">Transactions</th></tr></thead>
+      <tbody>
+      {% for p in people %}
+        <tr{% if not p.is_active %} class="row-muted"{% endif %}>
+          <td><a href="{% url 'ledger:person_detail' p.pk %}"><strong>{{ p.alias }}</strong></a></td>
+          <td>{% if p.person_type %}{{ p.person_type.name }}{% else %}<span class="badge badge-warn">not set</span>{% endif %}</td>
+          <td class="num">{% if p.person_type %}{{ p.person_type.fringe_rate|trim_decimal }}%{% else %}—{% endif %}</td>
+          <td class="num">{{ p.appointment_count }}</td>
+          <td class="num">{{ p.transaction_count }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No people yet. They're created automatically when you import payroll or expense files, or add them by hand to plan future appointments.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

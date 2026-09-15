@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Preview import{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Import · step 2 of 2</p>
+    <h1>Preview</h1>
+    <p class="muted">{{ batch.filename }} · {{ batch.get_source_display }}{% if batch.profile %} · mapping “{{ batch.profile.name }}”{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'ledger:import_map' batch.pk %}">← Adjust columns</a>
+    <form method="post" action="{% url 'ledger:import_cancel' batch.pk %}">{% csrf_token %}<button class="btn btn-ghost" type="submit">Cancel import</button></form>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><span>Will import</span><strong>{{ summary.importable }}</strong><small>{{ summary.total|money_cents }}</small></div>
+  <div class="kpi"><span>Duplicates skipped</span><strong>{{ summary.duplicates }}</strong><small>already imported</small></div>
+  <div class="kpi"><span>Other rows skipped</span><strong>{{ summary.skipped.values|sum_values }}</strong></div>
+  <div class="kpi"><span>Without fund</span><strong>{{ summary.no_fund }}</strong><small>go to Review</small></div>
+  <div class="kpi"><span>Without category</span><strong>{{ summary.no_category }}</strong></div>
+  <div class="kpi"><span>New people</span><strong>{{ summary.new_people }}</strong></div>
+</div>
+
+{% if summary.skipped %}
+<p class="small muted">Skipped: {% for reason, count in summary.skipped.items %}{{ reason }} ({{ count }}){% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+{% endif %}
+{% if person_mapped and not batch.person_tokens %}
+<p class="notice notice-warn small">The person column wasn't recognized as names or employee IDs, so rows won't be linked to people.</p>
+{% endif %}
+
+{% if summary.unknown_codes %}
+<section class="card">
+  <h2>Worktag IDs you don't track yet</h2>
+  <p class="small muted">Rows with only these IDs will land in Review. Add a fund now (opens in a new tab), then come back and reload this preview.</p>
+  <ul class="suggestions">
+    {% for code, guess in summary.unknown_codes %}
+      <li><code>{{ code }}</code> <span>{{ guess.1 }}</span>
+        <a class="btn btn-small" target="_blank" rel="noopener" href="{% url 'ledger:fund_create' %}?code={{ code|urlencode }}&amp;type={{ guess.0|urlencode }}&amp;name={{ guess.1|urlencode }}">Track as fund</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<form method="post" action="{% url 'ledger:import_commit' batch.pk %}" class="card commit-bar">
+  {% csrf_token %}
+  <label class="inline"><input type="checkbox" name="save_profile"{% if not batch.profile %} checked{% endif %}> Save this column mapping as</label>
+  <input type="text" name="profile_name" value="{{ batch.profile.name|default:batch.filename }}" maxlength="120" aria-label="Mapping name">
+  <button class="btn btn-primary" type="submit"{% if not summary.importable %} disabled{% endif %}>Import {{ summary.importable }} row{{ summary.importable|pluralize }}</button>
+</form>
+
+<section class="card flush">
+  <h2 class="card-title">Rows{% if more %} (first {{ records|length }}, {{ more }} more){% endif %}</h2>
+  <div class="table-wrap">
+    <table class="table table-compact">
+      <thead><tr><th class="rownum">Row</th><th>Result</th><th>Date</th><th class="num">Amount</th><th>Fund</th><th>Category</th><th>Person</th><th>Description</th></tr></thead>
+      <tbody>
+      {% for r in records %}
+        <tr class="{% if r.skip_reason or r.duplicate %}row-muted{% endif %}">
+          <td class="rownum">{{ r.line }}{% if r.column_label %}<div class="sub">{{ r.column_label }}</div>{% endif %}</td>
+          <td>{% if r.duplicate %}<span class="badge">duplicate</span>{% elif r.skip_reason %}<span class="badge badge-warn">{{ r.skip_reason }}</span>{% else %}<span class="badge badge-ok">import</span>{% endif %}</td>
+          <td class="nowrap">{{ r.date|date:"Y-m-d"|default:"—" }}</td>
+          <td class="num nowrap {{ r.amount|neg_class }}">{{ r.amount|money_cents }}{% if r.kind == 'fringe' %}<div class="sub">fringe</div>{% endif %}</td>
+          <td>{% if r.worktag %}{{ r.worktag.code }}{% else %}<span class="badge badge-warn" title="{{ r.worktag_note }}">none</span>{% endif %}</td>
+          <td>{% if r.category %}{{ r.category.name }}{% else %}<span class="badge badge-warn">none</span>{% endif %}{% if r.raw_category %}<div class="sub">{{ r.raw_category|truncatechars:30 }}</div>{% endif %}</td>
+          <td>{{ r.person_label|default:"" }}</td>
+          <td>{{ r.description|truncatechars:70 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="muted">No data rows found below the header row.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Add person{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Add person</h1></div>
+<section class="card">
+  <p class="muted">Use initials or a nickname, not a full name.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% include "partials/form_fields.html" %}
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-ghost" href="{% url 'ledger:people' %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}{{ person.alias }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Person</p>
+    <h1>{{ person.alias }}</h1>
+    <p class="muted small">Recognized in imports by {{ key_count }} hashed identifier{{ key_count|pluralize }}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn btn-primary" href="{% url 'ledger:appointment_create' %}?person={{ person.pk }}">Add appointment</a>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Details</h2>
+    <form method="post">
+      {% csrf_token %}
+      {% include "partials/form_fields.html" %}
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">Save</button>
+        <a class="btn btn-danger push-right" href="{% url 'ledger:person_delete' person.pk %}">Delete</a>
+      </div>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Merge duplicate</h2>
+    <p class="muted small">If the same person was created twice (e.g., once from a Workday name and once from a OneUSG employee ID), merge this entry into the other one. All links move over.</p>
+    <form method="post" action="{% url 'ledger:person_merge' person.pk %}">
+      {% csrf_token %}
+      {% include "partials/form_fields.html" with form=merge_form %}
+      <button class="btn" type="submit" data-confirm="Merge {{ person.alias }} into the selected person? This can't be undone.">Merge</button>
+    </form>
+  </section>
+</div>
+
+<section class="card flush">
+  <h2 class="card-title">Appointments (planned payroll)</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Fund</th><th>Kind</th><th>Period</th><th class="num">Monthly salary</th><th class="num">Effort</th><th class="num">Fringe</th><th class="num">Tuition / mo</th><th></th></tr></thead>
+      <tbody>
+      {% for a in appointments %}
+        <tr>
+          <td><a href="{% url 'ledger:fund_detail' a.worktag_id %}">{{ a.worktag.code }}</a></td>
+          <td>{{ a.get_kind_display }}</td>
+          <td class="nowrap">{{ a.start_date|date:"M j, Y" }} – {{ a.end_date|date:"M j, Y" }}</td>
+          <td class="num">{{ a.monthly_salary|money }}</td>
+          <td class="num">{{ a.effort_pct|trim_decimal }}%</td>
+          <td class="num">{{ a.fringe_rate|trim_decimal }}%</td>
+          <td class="num">{{ a.tuition_monthly|money }}</td>
+          <td class="row-actions"><a href="{% url 'ledger:appointment_edit' a.pk %}">Edit</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="muted">No appointments.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card flush">
+  <h2 class="card-title">Recent transactions</h2>
+  {% include "ledger/partials/transaction_rows.html" with show_fund=True %}
+</section>
+{% endblock %}

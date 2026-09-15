@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Set up two-factor authentication{% endblock %}
+{% block main_class %}auth{% endblock %}
+{% block content %}
+<div class="auth-card auth-wide">
+  <h1>{% if replacing %}Replace authenticator{% else %}Set up two-factor authentication{% endif %}</h1>
+  {% if replacing %}
+    <p class="notice notice-warn">Confirming a new code removes your current authenticator.</p>
+  {% else %}
+    <p class="muted">Every sign-in needs your password and a code from your phone.</p>
+  {% endif %}
+  <ol class="steps">
+    <li>Install an authenticator app, such as Microsoft Authenticator, Google Authenticator, 1Password, or Duo Mobile.</li>
+    <li>Add an account in the app and scan this QR code.
+      <div class="qr"><img src="{{ qr_data_uri }}" alt="QR code for your authenticator app" width="200" height="200"></div>
+      <details><summary>Can't scan? Enter this key manually</summary><code class="secret">{{ secret }}</code></details>
+    </li>
+    <li>Enter the 6-digit code the app shows.</li>
+  </ol>
+  <form method="post">
+    {% csrf_token %}
+    {% include "partials/field.html" with field=form.token %}
+    <button class="btn btn-primary btn-block" type="submit">Turn on two-factor</button>
+  </form>
+  {% if not replacing %}
+  <form method="post" action="{% url 'accounts:logout' %}" class="auth-alt">
+    {% csrf_token %}<button type="submit" class="linklike">Sign out</button>
+  </form>
+  {% else %}
+  <p class="auth-alt"><a href="{% url 'accounts:security' %}">Cancel</a></p>
+  {% endif %}
+</div>
+{% endblock %}

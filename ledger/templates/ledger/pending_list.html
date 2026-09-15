@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Pending{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Pending</h1>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'ledger:pending_create' %}">Add pending entry</a></div>
+</div>
+<p class="muted">Spending you expect but that isn't in a report yet (orders, planned travel, invoices). It counts against the fund until you reconcile it with the real transaction.</p>
+
+<form method="get" class="filters card">
+  <select name="status" aria-label="Status">
+    {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    <option value="all"{% if status == "all" %} selected{% endif %}>All</option>
+  </select>
+  <select name="fund" aria-label="Fund">
+    <option value="">All funds</option>
+    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.code }}</option>{% endfor %}
+  </select>
+  <button class="btn" type="submit">Filter</button>
+</form>
+
+<section class="card flush">
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Description</th><th>Fund</th><th>Category</th><th>Expected</th><th>Status</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr>
+          <td>{{ e.description }}{% if e.person %}<div class="sub">{{ e.person.alias }}</div>{% endif %}</td>
+          <td><a href="{% url 'ledger:fund_detail' e.worktag_id %}">{{ e.worktag.code }}</a></td>
+          <td>{{ e.category.name }}</td>
+          <td class="nowrap">{{ e.expected_date|date:"Y-m-d"|default:"—" }}{% if e.status == "pending" and e.expected_date and e.expected_date < today %} <span class="badge badge-warn">past</span>{% endif %}</td>
+          <td>{{ e.get_status_display }}{% if e.reconciled_with %}<div class="sub"><a href="{% url 'ledger:transaction_edit' e.reconciled_with_id %}">{{ e.reconciled_with.date|date:"Y-m-d" }} · {{ e.reconciled_with.amount|money_cents }}</a></div>{% endif %}</td>
+          <td class="num nowrap">{{ e.amount|money_cents }}</td>
+          <td class="row-actions">
+            {% if e.status == "pending" %}<a href="{% url 'ledger:pending_reconcile' e.pk %}">Reconcile</a>{% endif %}
+            <a href="{% url 'ledger:pending_edit' e.pk %}">Edit</a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted">No entries.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

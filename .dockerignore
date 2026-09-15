@@ -1,0 +1,11 @@
+.venv
+.git
+.claude
+.env
+*.sqlite3
+db.sqlite3
+staticfiles
+samples
+__pycache__
+*.pyc
+.DS_Store

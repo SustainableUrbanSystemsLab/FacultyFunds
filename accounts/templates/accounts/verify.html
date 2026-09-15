@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Two-factor check{% endblock %}
+{% block main_class %}auth{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Enter your code</h1>
+  <p class="muted">Open your authenticator app and enter the 6-digit code for Faculty Budget. Lost your phone? Enter one of your backup codes instead.</p>
+  <form method="post">
+    {% csrf_token %}
+    {% include "partials/field.html" with field=form.token %}
+    <button class="btn btn-primary btn-block" type="submit">Verify</button>
+  </form>
+  <form method="post" action="{% url 'accounts:logout' %}" class="auth-alt">
+    {% csrf_token %}<button type="submit" class="linklike">Sign out</button>
+  </form>
+</div>
+{% endblock %}

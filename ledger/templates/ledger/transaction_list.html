@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Transactions</h1>
+  <div class="actions"><a class="btn btn-primary" href="{% url 'ledger:transaction_create' %}">Add manual transaction</a></div>
+</div>
+
+<form method="get" class="filters card">
+  <input type="search" name="q" value="{{ params.q }}" placeholder="Search description, reference, worktags" aria-label="Search">
+  <select name="fund" aria-label="Fund">
+    <option value="">All funds</option>
+    <option value="none"{% if params.fund == "none" %} selected{% endif %}>No fund</option>
+    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.code }}</option>{% endfor %}
+  </select>
+  <select name="category" aria-label="Category">
+    <option value="">All categories</option>
+    <option value="none"{% if params.category == "none" %} selected{% endif %}>No category</option>
+    {% for c in categories %}<option value="{{ c.pk }}"{% if params.category == c.pk|stringformat:"s" %} selected{% endif %}>{{ c.name }}</option>{% endfor %}
+  </select>
+  <select name="source" aria-label="Source">
+    <option value="">All sources</option>
+    {% for value, label in sources %}<option value="{{ value }}"{% if params.source == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <label class="inline">From <input type="date" name="from" value="{{ params.from }}"></label>
+  <label class="inline">To <input type="date" name="to" value="{{ params.to }}"></label>
+  <button class="btn" type="submit">Filter</button>
+  <a class="btn btn-ghost" href="?">Clear</a>
+</form>
+
+<p class="muted">{{ page.paginator.count }} transaction{{ page.paginator.count|pluralize }} · total {{ total|money_cents }}</p>
+
+<form method="post" action="{% url 'ledger:transactions_bulk' %}" class="card flush" data-bulk>
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% include "ledger/partials/bulk_bar.html" %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th class="check"></th><th>Date</th><th>Fund</th><th>Description</th><th>Category</th><th>Person</th><th>Source</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for t in page %}
+        <tr>
+          <td class="check"><input type="checkbox" name="ids" value="{{ t.pk }}" aria-label="Select"></td>
+          <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
+          <td>{% if t.worktag %}<a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.code }}</a>{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>
+          <td>{{ t.description|default:t.raw_category|default:"—"|truncatechars:80 }}{% if t.reference %}<div class="sub">{{ t.reference|truncatechars:50 }}</div>{% endif %}</td>
+          <td>{% if t.category %}{{ t.category.name }}{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>
+          <td>{% if t.person %}<a href="{% url 'ledger:person_detail' t.person_id %}">{{ t.person.alias }}</a>{% endif %}</td>
+          <td class="small">{% if t.batch_id %}<a href="{% url 'ledger:import_preview' t.batch_id %}">{{ t.get_source_display }}</a>{% else %}{{ t.get_source_display }}{% endif %}</td>
+          <td class="num nowrap {{ t.amount|neg_class }}">{{ t.amount|money_cents }}</td>
+          <td class="row-actions"><a href="{% url 'ledger:transaction_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">Edit</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9" class="muted">No transactions match.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</form>
+{% include "ledger/partials/pager.html" %}
+{% endblock %}

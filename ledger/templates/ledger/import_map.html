@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Match columns{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Import · step 1 of 2</p>
+    <h1>Match columns</h1>
+    <p class="muted">{{ batch.filename }} · {{ batch.get_source_display }} · {{ row_count }} data row{{ row_count|pluralize }}</p>
+  </div>
+  <form method="post" action="{% url 'ledger:import_cancel' batch.pk %}">
+    {% csrf_token %}<button class="btn btn-ghost" type="submit">Cancel import</button>
+  </form>
+</div>
+
+<form method="post" class="stack">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="form-error">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+
+  <section class="card">
+    <h2>File layout</h2>
+    <div class="form-grid">
+      {% include "partials/field.html" with field=form.sheet_name %}
+      {% include "partials/field.html" with field=form.header_row %}
+    </div>
+    <p class="small muted">Change the sheet or header row and click “Continue”. The columns are re-read first.</p>
+    <div class="table-wrap sample">
+      <table class="table table-compact">
+        <thead><tr><th class="rownum"></th>{% for letter in columns %}<th>{{ letter }}</th>{% endfor %}</tr></thead>
+        <tbody>
+        {% for number, row in sample %}
+          <tr{% if number == batch.header_row|add:1 %} class="row-header"{% endif %}>
+            <td class="rownum">{{ number }}</td>
+            {% for cell in row %}<td>{{ cell|truncatechars:40 }}</td>{% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if person_columns %}
+      <p class="notice small">Pseudonymized people columns: {{ person_columns|join:", " }}.</p>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Columns</h2>
+    <div class="form-grid mapping">
+      {% for field in form.mapping_fields %}{% include "partials/field.html" %}{% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Options</h2>
+    <div class="form-grid">
+      {% for field in form.option_fields %}{% include "partials/field.html" %}{% endfor %}
+    </div>
+  </section>
+
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">Continue to preview</button>
+  </div>
+</form>
+{% endblock %}

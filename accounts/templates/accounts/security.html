@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Security{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Security</h1></div>
+
+{% if codes %}
+<section class="card card-highlight">
+  <h2>Your backup codes</h2>
+  <p>Each code works once if you lose your phone. Save them in a password manager now. They won't be shown again.</p>
+  <ul class="codes">{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<div class="grid-2">
+  <section class="card">
+    <h2>Authenticator app</h2>
+    {% if totp_device %}
+      <p><span class="badge badge-ok">On</span> Set up {{ totp_device.created_at|date:"M j, Y"|default:"" }}</p>
+    {% endif %}
+    <p><a class="btn" href="{% url 'accounts:setup' %}">Replace authenticator</a></p>
+  </section>
+  <section class="card">
+    <h2>Backup codes</h2>
+    <p>{{ remaining }} unused code{{ remaining|pluralize }} left.</p>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="regenerate">
+      <button class="btn" type="submit" data-confirm="Generate new codes? Your old backup codes will stop working.">Generate new codes</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Password</h2>
+    <p><a class="btn" href="{% url 'accounts:password_change' %}">Change password</a></p>
+  </section>
+</div>
+{% endblock %}

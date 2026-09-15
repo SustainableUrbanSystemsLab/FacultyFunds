@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Locked{% endblock %}
+{% block main_class %}auth{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>Too many attempts</h1>
+  <p>Sign-in is paused after several failed attempts. Try again in an hour.</p>
+  <p class="auth-alt"><a href="{% url 'accounts:login' %}">Back to sign in</a></p>
+</div>
+{% endblock %}

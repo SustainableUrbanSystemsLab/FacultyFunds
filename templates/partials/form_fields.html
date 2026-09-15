@@ -1,0 +1,5 @@
+{% if form.non_field_errors %}<div class="form-error">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+{% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+<div class="form-grid">
+  {% for field in form.visible_fields %}{% include "partials/field.html" %}{% endfor %}
+</div>

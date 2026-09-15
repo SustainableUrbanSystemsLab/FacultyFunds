@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load ledger_tags %}
+{% block title %}Reconcile{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Reconcile pending entry</h1></div>
+<section class="card">
+  <dl class="facts">
+    <dt>Description</dt><dd>{{ entry.description }}</dd>
+    <dt>Fund</dt><dd>{{ entry.worktag }}</dd>
+    <dt>Category</dt><dd>{{ entry.category.name }}</dd>
+    <dt>Amount</dt><dd>{{ entry.amount|money_cents }}</dd>
+    <dt>Expected</dt><dd>{{ entry.expected_date|date:"M j, Y"|default:"—" }}</dd>
+    <dt>Status</dt><dd>{{ entry.get_status_display }}</dd>
+  </dl>
+</section>
+
+<form method="post" class="card flush">
+  {% csrf_token %}
+  <h2 class="card-title">Which transaction is it?</h2>
+  <p class="card-body muted small">Closest amounts on the same fund{% if entry.expected_date %} within 4 months of the expected date{% endif %}.</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th class="check"></th><th>Date</th><th>Description</th><th>Category</th><th class="num">Amount</th></tr></thead>
+      <tbody>
+      {% for t in suggestions %}
+        <tr>
+          <td class="check"><input type="radio" name="transaction" value="{{ t.pk }}" id="txn-{{ t.pk }}"{% if forloop.first %} checked{% endif %}></td>
+          <td class="nowrap"><label for="txn-{{ t.pk }}">{{ t.date|date:"Y-m-d" }}</label></td>
+          <td>{{ t.description|default:t.raw_category|default:"—"|truncatechars:80 }}</td>
+          <td>{{ t.category.name|default:"—" }}</td>
+          <td class="num nowrap">{{ t.amount|money_cents }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No candidate transactions yet. Import the latest report first.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="actions card-body">
+    {% if suggestions %}<button class="btn btn-primary" type="submit">Reconcile with selected</button>{% endif %}
+    {% if entry.status == "pending" %}
+      <button class="btn" type="submit" name="action" value="cancel" data-confirm="Cancel this pending entry? It will no longer count against the fund.">It won't happen: cancel</button>
+    {% else %}
+      <button class="btn" type="submit" name="action" value="reopen">Reopen</button>
+    {% endif %}
+    <a class="btn btn-ghost" href="{% url 'ledger:pending' %}">Back</a>
+  </div>
+</form>
+{% endblock %}

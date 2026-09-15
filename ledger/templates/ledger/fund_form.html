@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% if worktag %}Edit {{ worktag.code }}{% else %}Add fund{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{% if worktag %}Edit {{ worktag.code }}{% else %}Add fund{% endif %}</h1></div>
+<form method="post" class="stack">
+  {% csrf_token %}
+  <section class="card">
+    <h2>Fund</h2>
+    {% include "partials/form_fields.html" with form=form %}
+  </section>
+  <section class="card">
+    <h2>Budget by category</h2>
+    <p class="muted">Total award or allocation per category. Leave blank for none. If the budget lists F&amp;A, enter it too.</p>
+    {% include "partials/form_fields.html" with form=budget_form %}
+    <p class="budget-total" data-sum-target>Total: <strong data-sum-output>—</strong></p>
+  </section>
+  <div class="actions">
+    <button class="btn btn-primary" type="submit">Save</button>
+    <a class="btn btn-ghost" href="{% if worktag %}{{ worktag.get_absolute_url }}{% else %}{% url 'ledger:dashboard' %}{% endif %}">Cancel</a>
+    {% if worktag %}<a class="btn btn-danger push-right" href="{% url 'ledger:fund_delete' worktag.pk %}">Delete fund</a>{% endif %}
+  </div>
+</form>
+{% endblock %}

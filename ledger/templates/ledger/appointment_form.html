@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{% if appointment %}Edit appointment{% else %}Add appointment{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{% if appointment %}Edit appointment{% else %}Add appointment{% endif %}</h1></div>
+<section class="card">
+  <p class="muted">Planned payroll on one fund. Projections charge <em>monthly salary × effort</em> plus fringe for every month without a salary actual, and tuition remission per month if the person type has one (for example, GSTRP for graduate assistants). For summer salary, add a separate “Summer salary” appointment for those months.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% include "partials/form_fields.html" %}
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-ghost" href="{{ next|default:'/people/' }}">Cancel</a>
+      {% if appointment %}<a class="btn btn-danger push-right" href="{% url 'ledger:appointment_delete' appointment.pk %}">Delete</a>{% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}
