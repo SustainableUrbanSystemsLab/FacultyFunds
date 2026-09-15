@@ -30,7 +30,7 @@
   <div class="kpi"><span>Planned payroll</span><strong>{{ t.planned|money }}</strong></div>
   <div class="kpi"><span>Left now</span><strong class="{{ t.remaining|neg_class }}">{{ t.remaining|money }}</strong><small>after spent + pending</small></div>
   <div class="kpi"><span>Projected at end</span><strong class="{{ t.projected_remaining|neg_class }}">{{ t.projected_remaining|money }}</strong><small>after planned payroll</small></div>
-  <div class="kpi"><span>Burn rate</span><strong>{{ summary.burn_rate|money }}<small> /mo</small></strong>{% if summary.runway_months is not None %}<small>{{ summary.runway_months|runway }} runway{% if summary.months_left is not None %} · {{ summary.months_left }} mo left{% endif %}</small>{% endif %}</div>
+  <div class="kpi"><span>Burn rate</span><strong>{{ summary.burn_rate|money }}<small> /mo</small></strong><small>{% if summary.burn_months %}avg of {{ summary.burn_months }} mo{% if summary.runway_months is not None %} · {{ summary.runway_months|runway }} runway{% endif %}{% if summary.months_left is not None %} · {{ summary.months_left }} mo left{% endif %}{% else %}no complete month yet{% endif %}</small></div>
 </div>
 {% endwith %}
 

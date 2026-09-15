@@ -106,6 +106,7 @@ class FundSummary:
     plan_rows: list[dict]
     monthly_actual: dict[dt.date, Decimal]
     monthly_planned: dict[dt.date, Decimal]
+    burn_months: int = 0  # how many complete months the burn rate averages over
     alerts: list[Alert] = field(default_factory=list)
 
     @property
@@ -331,6 +332,7 @@ def summarize_fund(
         plan_rows=plan_rows,
         monthly_actual=dict(monthly_actual),
         monthly_planned=dict(monthly_planned),
+        burn_months=len(window),
     )
     summary.alerts = _fund_alerts(
         summary, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll, carried,
@@ -366,7 +368,8 @@ def _fund_alerts(
             elif not line.budget and line.projected > 0:
                 add("info", f"{line.category.name} has spending ({_money(line.projected)}) but no budget line.")
     if w.end_date and s.run_out_date and s.run_out_date < w.end_date and total.remaining > 0:
-        add("warn", f"At the current burn rate ({_money(s.burn_rate)}/month) money runs out around "
+        basis = f"average of the last {s.burn_months} months" if s.burn_months > 1 else "based on one month of spending"
+        add("warn", f"At the current burn rate ({_money(s.burn_rate)}/month, {basis}) money runs out around "
                     f"{s.run_out_date:%b %Y}, before the end date.")
     if w.end_date and w.is_active:
         days = (w.end_date - today).days
