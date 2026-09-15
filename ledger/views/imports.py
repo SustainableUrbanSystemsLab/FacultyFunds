@@ -13,6 +13,7 @@ SAMPLE_ROWS = 8
 
 
 def imports_index(request):
+    importer.purge_stale_batches()
     context = {
         "form": UploadForm(),
         "batches": ImportBatch.objects.select_related("profile")[:50],
@@ -62,7 +63,9 @@ def import_map(request, pk):
         if form.is_valid():
             batch.column_map = form.column_map()
             batch.options = {**batch.options, **form.options()}
-            batch.save(update_fields=["column_map", "options"])
+            if scrubbed := importer.ensure_person_column_scrubbed(batch):
+                messages.info(request, f"“{scrubbed}” wasn't recognized as a people column at upload; its values are now pseudonymized.")
+            batch.save(update_fields=["column_map", "options", "sheets", "person_tokens"])
             return redirect("ledger:import_preview", pk=batch.pk)
     else:
         initial = {
@@ -108,6 +111,7 @@ def import_preview(request, pk):
         "more": max(0, len(records) - PREVIEW_ROWS),
         "summary": summary,
         "person_mapped": bool(batch.column_map.get("person")),
+        "as_pending": batch.options.get("import_as") == "pending",
     }
     return render(request, "ledger/import_preview.html", context)
 
@@ -115,13 +119,18 @@ def import_preview(request, pk):
 @require_POST
 def import_commit(request, pk):
     batch = _staged(pk)
-    stats = importer.commit_batch(
-        batch,
-        save_profile=request.POST.get("save_profile") == "on",
-        profile_name=request.POST.get("profile_name", "").strip(),
-    )
+    try:
+        stats = importer.commit_batch(
+            batch,
+            save_profile=request.POST.get("save_profile") == "on",
+            profile_name=request.POST.get("profile_name", "").strip(),
+        )
+    except importer.BatchNotStaged:
+        messages.warning(request, "This file was already imported.")
+        return redirect("ledger:import_preview", pk=batch.pk)
     noun = "pending entries" if stats["import_as"] == "pending" else "transactions"
-    messages.success(request, f"Imported {stats['created']} {noun} ({stats['duplicates']} duplicates skipped).")
+    note = f", {stats['removed']} earlier transactions removed as cancelled" if stats["removed"] else ""
+    messages.success(request, f"Imported {stats['created']} {noun} ({stats['duplicates']} duplicates skipped{note}).")
     return redirect("ledger:import_preview", pk=batch.pk)
 
 

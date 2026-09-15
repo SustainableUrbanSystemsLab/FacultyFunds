@@ -19,6 +19,7 @@ class ValueParsingTests(SimpleTestCase):
 
     def test_dates(self):
         self.assertEqual(parse_date("2026-08-31"), dt.date(2026, 8, 31))
+        self.assertEqual(parse_date("2026-8-5"), dt.date(2026, 8, 5))
         self.assertEqual(parse_date("08/31/2026"), dt.date(2026, 8, 31))
         self.assertEqual(parse_date("31-AUG-2026"), dt.date(2026, 8, 31))
         self.assertEqual(parse_date("31/08/2026", day_first=True), dt.date(2026, 8, 31))
@@ -45,6 +46,10 @@ class FileParseTests(SimpleTestCase):
         self.assertEqual(mapping.detect_header_row(rows), 1)
         self.assertEqual(rows[2][2], "Doe,Jane A")
 
+    def test_control_characters_removed(self):
+        self.assertEqual(fileparse.cell_to_text("Lab\x00 supplies\x07"), "Lab supplies")
+        self.assertEqual(fileparse.cell_to_text("a\tb\r\nc"), "a b\nc")
+
     def test_csv_and_rejects_empty(self):
         sheets = fileparse.read_tables("a.csv", b"Date,Amount\n2026-01-05,10.00\n")
         self.assertEqual(next(iter(sheets.values())), [["Date", "Amount"], ["2026-01-05", "10.00"]])
@@ -65,6 +70,15 @@ class PiiTests(SimpleTestCase):
         _, b = pii.pseudonymize("Doe,Jane A", "name")
         self.assertEqual(a["key"], b["key"])
         self.assertEqual(a["initials"], "JD")
+
+    def test_ids_need_digits_and_numeric_names_become_ids(self):
+        self.assertIsNone(pii.pseudonymize("N/A", "id"))
+        self.assertIsNone(pii.pseudonymize("Total", "name"))
+        self.assertIsNone(pii.pseudonymize("Vacant", "name"))
+        token, info = pii.pseudonymize("000123456", "name")
+        self.assertTrue(token.startswith("ID#"))
+        self.assertEqual(info["kind"], "id")
+        self.assertEqual(info["key"], pii.pseudonymize("123456", "id")[1]["key"])
 
     def test_scrub_masks_names_everywhere_in_row(self):
         rows = [["Report", "Worker", "SSN note"], ["EXP-1 - Jane Doe on 08/20", "Jane Doe", "id 123-45-6789"]]

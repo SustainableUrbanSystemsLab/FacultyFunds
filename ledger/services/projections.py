@@ -2,8 +2,9 @@
 
 Rules (kept deliberately explainable):
 * Actuals = imported/manual transactions. Uncategorized amounts count as "Other".
-* Payroll salary with no fringe line for the same person and month gets estimated fringe
-  from the person's rate.
+* Payroll salary with no fringe line for the same person and month gets estimated fringe.
+* Fringe and tuition use the person type's rate for the fiscal year (July–June) each month
+  falls in; a year without rates reuses the closest earlier year and raises an alert.
 * Planned payroll (appointments) counts for every month that has no salary actual for that
   person on that fund; planned tuition likewise for months without a tuition actual.
 * F&A = fund rate x F&A-eligible spending (MTDC categories), unless the fund uses imported
@@ -19,8 +20,10 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.utils import timezone
 
 from ..models import ZERO, Category, PendingEntry, Person, Transaction, Worktag
+from .rates import RateTable, fiscal_year
 
 BURN_WINDOW_MONTHS = 6
+MAX_RUNWAY_MONTHS = 1200
 DAYS_PER_MONTH = Decimal("30.44")
 CENT = Decimal("0.01")
 
@@ -111,9 +114,15 @@ class FundSummary:
         return (end - timezone.localdate()).days if end else None
 
 
-def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: list[Category] | None = None) -> FundSummary:
+def summarize_fund(
+    worktag: Worktag,
+    today: dt.date | None = None,
+    categories: list[Category] | None = None,
+    rates: RateTable | None = None,
+) -> FundSummary:
     today = today or timezone.localdate()
     categories = categories if categories is not None else list(Category.objects.all())
+    rates = rates if rates is not None else RateTable()
     by_code = {c.code: c for c in categories}
     code_of = {c.pk: c.code for c in categories}
     lines = {c.pk: Line(c) for c in categories}
@@ -159,23 +168,47 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
     def is_covered(code: str, person_id, month) -> bool:
         return (person_id, month) in covered[code] or (None, month) in covered[code]
 
+    # Rates follow the fiscal year of each month. Remember years that had to reuse an earlier year.
+    carried: dict[tuple[str, int], int | None] = {}  # (person type, fiscal year) -> year used, None if no rates
+
+    def rate_for(person_type, metric: str, month: dt.date) -> Decimal:
+        if person_type is None:
+            return ZERO
+        year = fiscal_year(month)
+        value, source = rates.lookup(person_type.pk, metric, year)
+        if source is None and metric == "fringe_rate":
+            carried.setdefault((person_type.name, year), None)
+        elif source is not None and source != year and value:
+            carried.setdefault((person_type.name, year), source)
+        return value
+
     # Estimated fringe for payroll months that have salary but no fringe line.
     fringe_line = line_for(Category.FRINGE)
-    rate_by_person = {a.person_id: a.fringe_rate for a in appointments}
     unestimated_payroll = False
     if salary:
         people = Person.objects.select_related("person_type").in_bulk({p for p, _ in salary if p})
         for (person_id, month), amount in salary.items():
-            if (person_id, month) in covered[Category.FRINGE]:
+            if is_covered(Category.FRINGE, person_id, month):
                 continue
             person = people.get(person_id)
             if person is None:
                 unestimated_payroll = True
                 continue
-            if person.person_type is None and person_id not in rate_by_person:
+            override = next(
+                (
+                    a.fringe_rate_override
+                    for a in appointments
+                    if a.person_id == person_id
+                    and a.fringe_rate_override is not None
+                    and a.start_date <= month_end(month)
+                    and a.end_date >= month
+                ),
+                None,
+            )
+            if override is None and person.person_type is None:
                 people_without_type.add(person.alias)
                 continue
-            rate = rate_by_person.get(person_id, person.person_type.fringe_rate if person.person_type else ZERO)
+            rate = override if override is not None else rate_for(person.person_type, "fringe_rate", month)
             estimate = amount * rate / 100
             fringe_line.actual += estimate
             fringe_line.estimated += estimate
@@ -184,14 +217,18 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
                 monthly_eligible[month] += estimate
 
     # --- Planned payroll and tuition
+    current = month_start(today)
     monthly_planned: dict[dt.date, Decimal] = defaultdict(Decimal)
     monthly_planned_eligible: dict[dt.date, Decimal] = defaultdict(Decimal)
     salary_line, tuition_line = line_for(Category.SALARIES), line_for(Category.TUITION)
     plan_rows = []
+    past_planned_months: set[dt.date] = set()  # months already over with planned pay but no payroll actual
+    unlinked_salary_months = sorted({month for person_id, month in covered[Category.SALARIES] if person_id is None})
     for appointment in appointments:
         start = max(appointment.start_date, worktag.tracking_start or appointment.start_date)
         end = appointment.end_date
-        if appointment.person.person_type is None and appointment.fringe_rate_override is None:
+        person_type = appointment.person.person_type
+        if person_type is None and appointment.fringe_rate_override is None:
             people_without_type.add(appointment.person.alias)
         plan = {"appointment": appointment, "months": 0, "salary": ZERO, "fringe": ZERO, "tuition": ZERO}
         for month in iter_months(start, end):
@@ -202,18 +239,26 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
             planned_here = ZERO
             if not is_covered(Category.SALARIES, appointment.person_id, month):
                 pay = appointment.monthly_charge * fraction
-                benefits = pay * appointment.fringe_rate / 100
+                fringe_rate = appointment.fringe_rate_override
+                if fringe_rate is None:
+                    fringe_rate = rate_for(person_type, "fringe_rate", month)
+                benefits = pay * fringe_rate / 100
                 salary_line.planned += pay
                 fringe_line.planned += benefits
                 plan["salary"] += pay
                 plan["fringe"] += benefits
                 plan["months"] += 1
                 planned_here += pay + benefits
+                if month < current:
+                    past_planned_months.add(month)
                 if salary_line.category.pk in eligible_ids:
                     monthly_planned_eligible[month] += pay
                 if fringe_line.category.pk in eligible_ids:
                     monthly_planned_eligible[month] += benefits
-            tuition = appointment.tuition_monthly * appointment.effort_pct / 100 * fraction
+            tuition_rate = appointment.tuition_monthly_override
+            if tuition_rate is None:
+                tuition_rate = rate_for(person_type, "tuition_monthly", month)
+            tuition = tuition_rate * appointment.effort_pct / 100 * fraction
             if tuition and not is_covered(Category.TUITION, appointment.person_id, month):
                 tuition_line.planned += tuition
                 plan["tuition"] += tuition
@@ -254,10 +299,13 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
     shown = [line for line in ordered if line.budget or line.actual or line.pending or line.planned]
 
     # --- Burn rate and runway
-    current = month_start(today)
+    # Average over the last 6 complete months, but not before the fund started or spending began,
+    # so a fund with one month of history isn't averaged over six.
     window_start = add_months(current, -BURN_WINDOW_MONTHS)
     if worktag.start_date:
         window_start = max(window_start, month_start(worktag.start_date))
+    if monthly_actual:
+        window_start = max(window_start, min(monthly_actual))
     window = [m for m in iter_months(window_start, current - dt.timedelta(days=1))] if window_start < current else []
     burn_rate = cents(sum((monthly_actual.get(m, ZERO) for m in window), ZERO) / len(window)) if window else None
     months_left = None
@@ -266,7 +314,8 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
     runway = run_out = burn_end = None
     if burn_rate and burn_rate > 0:
         runway = max(ZERO, total.remaining / burn_rate).quantize(Decimal("0.1"))
-        run_out = today + dt.timedelta(days=int(runway * DAYS_PER_MONTH))
+        if runway <= MAX_RUNWAY_MONTHS:  # beyond this a run-out date is meaningless (and overflows date math)
+            run_out = today + dt.timedelta(days=int(runway * DAYS_PER_MONTH))
         if months_left is not None:
             burn_end = cents(total.remaining - burn_rate * months_left)
 
@@ -284,7 +333,8 @@ def summarize_fund(worktag: Worktag, today: dt.date | None = None, categories: l
         monthly_planned=dict(monthly_planned),
     )
     summary.alerts = _fund_alerts(
-        summary, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll
+        summary, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll, carried,
+        past_planned_months, unlinked_salary_months, bool(appointments),
     )
     return summary
 
@@ -294,7 +344,10 @@ def _money(value: Decimal) -> str:
     return f"{sign}${abs(value):,.0f}"
 
 
-def _fund_alerts(s, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll):
+def _fund_alerts(
+    s, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll, carried,
+    past_planned_months, unlinked_salary_months, has_appointments,
+):
     w, total, alerts = s.worktag, s.total, []
 
     def add(level, message):
@@ -343,9 +396,31 @@ def _fund_alerts(s, today, pending_entries, uncategorized, ignored_fa, people_wi
         add("warn", "Set a person type (fringe rate) for: " + ", ".join(sorted(people_without_type)) + ".")
     if unestimated_payroll:
         add("info", "Some payroll rows have no person, so their fringe wasn't estimated.")
+    if unlinked_salary_months and has_appointments:
+        months = ", ".join(f"{m:%b %Y}" for m in unlinked_salary_months[:4])
+        more = f" and {len(unlinked_salary_months) - 4} more" if len(unlinked_salary_months) > 4 else ""
+        add("info", f"Salary rows without a person ({months}{more}) count as covering every planned appointment "
+                    "that month. Link them to people under Transactions for per-person projections.")
+    if past_planned_months:
+        first, last = min(past_planned_months), max(past_planned_months)
+        span = f"{first:%b %Y}" if first == last else f"{first:%b %Y} – {last:%b %Y}"
+        add("info", f"{len(past_planned_months)} past month{'s' if len(past_planned_months) != 1 else ''} ({span}) "
+                    "of planned payroll have no payroll actuals yet. Import payroll, or set the fund's tracking "
+                    "start date if that spending is already covered by an opening balance.")
+    no_rates = sorted({name for (name, _), source in carried.items() if source is None})
+    if no_rates:
+        add("warn", "No fringe rates entered for: " + ", ".join(no_rates) + ". Add them under Settings.")
+    reused = defaultdict(set)
+    for (name, year), source in carried.items():
+        if source is not None:
+            reused[(year, source)].add(name)
+    for (year, source), names in sorted(reused.items()):
+        add("info", f"FY{year} rates aren't entered for {', '.join(sorted(names))}; using FY{source} rates. "
+                    "Update them under Settings.")
     return alerts
 
 
 def summarize_funds(worktags, today: dt.date | None = None) -> list[FundSummary]:
     categories = list(Category.objects.all())
-    return [summarize_fund(worktag, today=today, categories=categories) for worktag in worktags]
+    rates = RateTable()
+    return [summarize_fund(worktag, today=today, categories=categories, rates=rates) for worktag in worktags]

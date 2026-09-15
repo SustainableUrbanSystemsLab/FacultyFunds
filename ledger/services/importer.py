@@ -3,6 +3,7 @@
 import datetime as dt
 import hashlib
 import json
+import re
 from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
@@ -29,6 +30,12 @@ from .rules import CategoryMatcher, WorktagMatcher, describe_code
 from .values import parse_amount, parse_date, parse_month_header
 
 DEFAULT_SKIP_STATUSES = "draft, cancel, canceled, cancelled, denied, sent back"
+TOTAL_WORDS = {"total", "totals", "grand total", "subtotal", "sub total", "sum", "sum total", "report total"}
+STATUS_SKIP = "status:"
+
+
+class BatchNotStaged(Exception):
+    """The batch was already imported or cancelled (for example by a double-click on Import)."""
 
 
 def default_options(source: str) -> dict:
@@ -92,12 +99,36 @@ def configure_sheet(batch: ImportBatch, sheet_name: str, header_row: int | None 
     else:
         batch.profile = None
         batch.column_map = mapping.auto_map(headers, batch.source)
+    ensure_person_column_scrubbed(batch)
 
 
 def person_columns(batch: ImportBatch) -> list[str]:
     headers = batch_headers(batch)
     header_row = batch.rows[batch.header_row] if batch.rows else []
     return [headers[i] for i, raw in enumerate(header_row) if i < len(headers) and pii.classify_header(raw)]
+
+
+def ensure_person_column_scrubbed(batch: ImportBatch) -> str:
+    """Pseudonymize the mapped Person column if the header scan didn't recognize it as one.
+
+    Returns the header name when a column had to be scrubbed now, else "".
+    """
+    header = batch.column_map.get("person")
+    if not header or not batch.rows:
+        return ""
+    headers = batch_headers(batch)
+    if header not in headers:
+        return ""
+    column = headers.index(header)
+    header_row = batch.rows[batch.header_row]
+    raw_header = header_row[column] if column < len(header_row) else ""
+    if pii.classify_header(raw_header):
+        return ""  # recognized at upload, already scrubbed
+    kind = "id" if re.search(r"\b(id|number|no|num)\b", pii.normalize_header(raw_header)) else "name"
+    scrubbed, tokens, _ = pii.scrub_rows(batch.rows, batch.header_row, extra_cols={column: kind})
+    batch.sheets[batch.sheet_name] = scrubbed
+    batch.person_tokens.update(tokens)
+    return header
 
 
 # --- Parsing ------------------------------------------------------------------
@@ -122,10 +153,17 @@ class ParsedRow:
     skip_reason: str = ""
     dedupe_key: str = ""
     duplicate: bool = False
+    # A row skipped for its status (cancelled, sent back...) that was imported earlier under a
+    # counting status. Committing removes that earlier transaction.
+    stale_existing: bool = False
 
     @property
     def importable(self) -> bool:
         return not self.skip_reason and not self.duplicate
+
+
+def _is_total_row(row: list[str]) -> bool:
+    return any(cell.strip().lower().rstrip(":") in TOTAL_WORDS for cell in row)
 
 
 def parse_batch(batch: ImportBatch) -> tuple[list[ParsedRow], dict]:
@@ -155,6 +193,7 @@ def parse_batch(batch: ImportBatch) -> tuple[list[ParsedRow], dict]:
     for line, row in enumerate(batch.rows[batch.header_row + 1 :], start=batch.header_row + 2):
         if not any(value.strip() for value in row):
             continue
+        total_row = _is_total_row(row)
         worktag_text = "\n".join(value for i in cols["worktags"] if (value := cell(row, i)))
         base = {
             "description": cell(row, cols["description"])[:500],
@@ -168,8 +207,9 @@ def parse_batch(batch: ImportBatch) -> tuple[list[ParsedRow], dict]:
         worktag, note = worktag_matcher.match(worktag_text)
         if worktag is None and default_worktag is not None:
             worktag, note = default_worktag, ""
-        for code in worktag_matcher.unknown_codes(worktag_text):
-            unknown_codes.setdefault(code, describe_code(code, worktag_text))
+        if not total_row:
+            for code in worktag_matcher.unknown_codes(worktag_text):
+                unknown_codes.setdefault(code, describe_code(code, worktag_text))
         matched_category = category_matcher.match(base["raw_category"], base["description"])
         status = base["raw_status"].lower()
         status_skip = next((word for word in skip_words if word in status), None)
@@ -192,8 +232,10 @@ def parse_batch(batch: ImportBatch) -> tuple[list[ParsedRow], dict]:
                 **base,
             )
             record.category = categories.get(Category.FRINGE) if kind == "fringe" else (matched_category or default_category)
-            if status_skip:
-                record.skip_reason = f"status: {base['raw_status']}"
+            if total_row:
+                record.skip_reason = "total row"
+            elif status_skip:
+                record.skip_reason = f"{STATUS_SKIP} {base['raw_status']}"
             elif amount is None:
                 record.skip_reason = "no amount" if not text else f"unreadable amount: {text[:24]}"
             elif amount == 0 and options["skip_zero"]:
@@ -207,9 +249,16 @@ def parse_batch(batch: ImportBatch) -> tuple[list[ParsedRow], dict]:
 
 
 def _assign_dedupe_keys(batch: ImportBatch, records: list[ParsedRow], options: dict) -> None:
+    """Fingerprint rows so re-importing a report skips what is already in the ledger.
+
+    The status is deliberately left out of the fingerprint: a report that was "Approved" last
+    month and is "Canceled" now must map to the same key so the earlier import can be removed.
+    """
     occurrences: Counter = Counter()
     for record in records:
-        if record.skip_reason:
+        if record.date is None or record.amount is None:
+            continue
+        if record.skip_reason and not record.skip_reason.startswith(STATUS_SKIP):
             continue
         person = batch.person_tokens.get(record.person_token, {}).get("key", record.person_token)
         signature = [
@@ -227,7 +276,12 @@ def _assign_dedupe_keys(batch: ImportBatch, records: list[ParsedRow], options: d
     for start in range(0, len(keys), 500):
         existing.update(model.objects.filter(dedupe_key__in=keys[start : start + 500]).values_list("dedupe_key", flat=True))
     for record in records:
-        record.duplicate = record.dedupe_key in existing
+        if not record.dedupe_key or record.dedupe_key not in existing:
+            continue
+        if record.skip_reason:
+            record.stale_existing = model is Transaction
+        else:
+            record.duplicate = True
 
 
 def _summarize(batch: ImportBatch, records: list[ParsedRow], unknown_codes: dict) -> dict:
@@ -242,6 +296,7 @@ def _summarize(batch: ImportBatch, records: list[ParsedRow], unknown_codes: dict
         "rows": len(records),
         "importable": len(importable),
         "duplicates": sum(1 for r in records if r.duplicate),
+        "stale": sum(1 for r in records if r.stale_existing),
         "skipped": dict(Counter(r.skip_reason.split(":")[0] for r in records if r.skip_reason)),
         "no_fund": sum(1 for r in importable if r.worktag is None),
         "no_category": sum(1 for r in importable if r.category is None),
@@ -292,13 +347,18 @@ def resolve_people(batch: ImportBatch, tokens: set[str]) -> dict[str, Person]:
 
 @db_transaction.atomic
 def commit_batch(batch: ImportBatch, save_profile: bool = False, profile_name: str = "") -> dict:
+    # Lock the batch row so a double-submitted form can't import the same rows twice.
+    batch = ImportBatch.objects.select_for_update().get(pk=batch.pk)
+    if batch.status != ImportBatch.Status.STAGED:
+        raise BatchNotStaged(batch.get_status_display())
+
     records, summary = parse_batch(batch)
     importable = [r for r in records if r.importable]
     people = resolve_people(batch, {r.person_token for r in importable if r.person_token})
     options = {**default_options(batch.source), **batch.options}
     fallback_category = Category.objects.filter(code=Category.OTHER).first()
 
-    skipped_no_fund = 0
+    skipped_no_fund = removed = 0
     if options["import_as"] == "pending":
         objects = []
         for r in importable:
@@ -314,6 +374,12 @@ def commit_batch(batch: ImportBatch, save_profile: bool = False, profile_name: s
             )
         PendingEntry.objects.bulk_create(objects, batch_size=500)
     else:
+        stale_keys = [r.dedupe_key for r in records if r.stale_existing]
+        if stale_keys:
+            PendingEntry.objects.filter(reconciled_with__dedupe_key__in=stale_keys).update(
+                status=PendingEntry.Status.PENDING, reconciled_with=None
+            )
+            removed = Transaction.objects.filter(dedupe_key__in=stale_keys).delete()[0]
         objects = [
             Transaction(
                 worktag=r.worktag, category=r.category, person=people.get(r.person_token), date=r.date,
@@ -347,6 +413,7 @@ def commit_batch(batch: ImportBatch, save_profile: bool = False, profile_name: s
         "created": len(objects),
         "import_as": options["import_as"],
         "duplicates": summary["duplicates"],
+        "removed": removed,
         "skipped": summary["skipped"],
         "skipped_no_fund": skipped_no_fund,
         "no_fund": summary["no_fund"] if options["import_as"] == "actual" else 0,

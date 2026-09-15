@@ -3,13 +3,27 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django_otp.oath import totp
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from ledger import samples
-from ledger.models import Appointment, Category, ImportBatch, PendingEntry, Person, Transaction, Worktag
+from ledger.forms import WorktagForm
+from django.utils import timezone
+
+from ledger.models import (
+    Appointment,
+    Category,
+    FiscalYearRate,
+    ImportBatch,
+    PendingEntry,
+    Person,
+    PersonType,
+    Transaction,
+    Worktag,
+)
+from ledger.services.rates import fiscal_year
 
 PASSWORD = "correct horse battery staple"
 
@@ -127,6 +141,31 @@ class PageTests(TestCase):
         self.assertEqual(Transaction.objects.filter(batch=batch).count(), 4)
         self.assertEqual(self.client.get(reverse("ledger:import_preview", args=[batch.pk])).status_code, 200)
 
+    def test_next_parameter_is_sanitized(self):
+        response = self.client.get(reverse("ledger:transaction_create") + "?next=https://evil.example/x")
+        self.assertNotContains(response, "evil.example")
+        response = self.client.get(reverse("ledger:transaction_create") + "?next=/pending/")
+        self.assertContains(response, 'href="/pending/"')
+
+    @override_settings(FILE_UPLOAD_MAX_MEMORY_SIZE=2048)
+    def test_oversized_upload_is_refused_before_parsing(self):
+        client = Client(raise_request_exception=False)
+        client.cookies = self.client.cookies
+        upload = SimpleUploadedFile("big.csv", b"Date,Amount\n" + b"2026-01-01,1\n" * 500)
+        response = client.post(reverse("ledger:import_upload"), {"source": "other_import", "file": upload})
+        self.assertEqual(response.status_code, 400)
+        self.assertContains(response, "too large", status_code=400)
+        self.assertFalse(ImportBatch.objects.exists())
+
+    def test_worktag_form_rejects_codes_owned_by_another_fund(self):
+        form = WorktagForm({"type": "gift", "code": "gr00012345", "name": "Dup", "fa_rate": "0", "fa_actuals": "calculate", "is_active": "on"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("already belongs to GR00012345", form.errors["code"][0])
+        form = WorktagForm({"type": "gift", "code": "GF1", "name": "Gift", "fa_rate": "0", "fa_actuals": "calculate",
+                            "match_codes": "AWD1\nGR00012345", "is_active": "on"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("match_codes", form.errors)
+
     def test_bulk_assign_and_settings_save(self):
         other = Transaction.objects.get(worktag__isnull=True)
         self.client.post(reverse("ledger:transactions_bulk"), {"ids": [other.pk], "worktag": self.fund.pk, "action": "assign"})
@@ -143,7 +182,22 @@ class PageTests(TestCase):
                 value = field.value()
                 if value is not None and value is not False:
                     data[field.html_name] = value
-        data["pt-0-fringe_rate"] = "30.0"
+        data["pt-0-name"] = "Faculty"
         response = self.client.post(reverse("ledger:settings"), data)
         errors = response.context and response.context["person_type_formset"].errors
         self.assertEqual(response.status_code, 302, errors)
+
+        # Rate grid: set this fiscal year's GRA fringe; the migrated FY2025 row stays.
+        current = fiscal_year(timezone.localdate())
+        rates_form = self.client.get(reverse("ledger:settings")).context["rates_form"]
+        self.assertIn(current, rates_form.fiscal_years)
+        gra = PersonType.objects.get(name="Graduate research assistant")
+        data = {"which": "rates", "fy": [str(year) for year in rates_form.fiscal_years]}
+        for field in rates_form:
+            if field.value() is not None:
+                data[field.html_name] = field.value()
+        data[f"fringe_{gra.pk}_{current}"] = "8.25"
+        response = self.client.post(reverse("ledger:settings"), data)
+        self.assertEqual(response.status_code, 302, response.context and response.context["rates_form"].errors)
+        self.assertEqual(FiscalYearRate.objects.get(person_type=gra, fiscal_year=current).fringe_rate, Decimal("8.25"))
+        self.assertEqual(FiscalYearRate.objects.get(person_type=gra, fiscal_year=2025).fringe_rate, Decimal("7.9"))

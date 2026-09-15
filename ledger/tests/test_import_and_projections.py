@@ -2,13 +2,14 @@ import datetime as dt
 import json
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from ledger import samples
 from ledger.models import (
     Appointment,
     BudgetLine,
     Category,
+    FiscalYearRate,
     ImportBatch,
     ImportProfile,
     PendingEntry,
@@ -19,6 +20,7 @@ from ledger.models import (
 )
 from ledger.services import importer
 from ledger.services.projections import summarize_fund
+from ledger.services.rates import RateTable, fiscal_year
 
 
 class ImportPipelineTests(TestCase):
@@ -33,7 +35,7 @@ class ImportPipelineTests(TestCase):
         self.assertNotIn("Jane", json.dumps(batch.sheets))
         records, summary = importer.parse_batch(batch)
         self.assertEqual(summary["importable"], 4)  # draft row and total row skipped
-        self.assertEqual(summary["skipped"], {"status": 1, "no readable date": 1})
+        self.assertEqual(summary["skipped"], {"status": 1, "total row": 1})
         self.assertEqual(summary["no_fund"], 1)  # gift GF00077777 isn't tracked
         self.assertIn("GF00077777", dict(summary["unknown_codes"]))
 
@@ -67,6 +69,7 @@ class ImportPipelineTests(TestCase):
     def test_import_as_pending(self):
         batch = self.stage_workday()
         batch.options["import_as"] = "pending"
+        batch.save()
         stats = importer.commit_batch(batch)
         self.assertEqual(stats["created"], 3)
         self.assertEqual(stats["skipped_no_fund"], 1)
@@ -78,6 +81,50 @@ class ImportPipelineTests(TestCase):
         funds, _ = importer.rematch_transactions()
         self.assertEqual(funds, 1)
         self.assertFalse(Transaction.objects.filter(worktag__isnull=True).exists())
+
+    def test_cancelled_report_removes_earlier_import(self):
+        importer.commit_batch(self.stage_workday())
+        self.assertEqual(Transaction.objects.filter(amount=Decimal("120.00")).count(), 1)
+        # Next month's export: the $120 supplies report was cancelled, everything else unchanged.
+        rows = [row[:7] + ("Canceled",) if row[6] == 120.00 else row for row in samples.WORKDAY_ROWS]
+        batch = importer.stage_upload("expenses-2.xlsx", samples.workday_expense_xlsx(rows), "workday_expense")
+        records, summary = importer.parse_batch(batch)
+        self.assertEqual((summary["importable"], summary["duplicates"], summary["stale"]), (0, 3, 1))
+        stale = next(r for r in records if r.stale_existing)
+        self.assertTrue(stale.skip_reason.startswith("status:"))
+        stats = importer.commit_batch(batch)
+        self.assertEqual((stats["created"], stats["removed"]), (0, 1))
+        self.assertFalse(Transaction.objects.filter(amount=Decimal("120.00")).exists())
+        self.assertEqual(Transaction.objects.count(), 3)
+
+    def test_total_row_skipped_in_wide_worksheet(self):
+        csv = (
+            b"Name,Project,Jul 2026,Aug 2026\n"
+            b"Doe Jane,GR00012345,2500,2500\n"
+            b"Total,,2500,2500\n"
+        )
+        batch = importer.stage_upload("plan.csv", csv, "other_import")
+        batch.column_map = {"amount": ["Jul 2026", "Aug 2026"], "worktags": ["Project"], "person": "Name", "date": ""}
+        records, summary = importer.parse_batch(batch)
+        self.assertEqual(summary["importable"], 2)
+        self.assertEqual(summary["skipped"], {"total row": 2})
+        self.assertEqual({r.date for r in records if r.importable}, {dt.date(2026, 7, 1), dt.date(2026, 8, 1)})
+
+    def test_commit_twice_is_rejected(self):
+        batch = self.stage_workday()
+        importer.commit_batch(batch)
+        with self.assertRaises(importer.BatchNotStaged):
+            importer.commit_batch(ImportBatch.objects.get(pk=batch.pk))
+        self.assertEqual(Transaction.objects.count(), 4)
+
+    def test_unrecognized_person_column_is_scrubbed_when_mapped(self):
+        csv = b"Date,Beneficiary,Amount,Grant\n2026-08-01,Jane Doe,10.00,GR00012345\n"
+        batch = importer.stage_upload("x.csv", csv, "other_import")
+        self.assertIn("Jane Doe", json.dumps(batch.sheets))  # "Beneficiary" isn't a known people header
+        batch.column_map["person"] = "Beneficiary"
+        self.assertEqual(importer.ensure_person_column_scrubbed(batch), "Beneficiary")
+        self.assertNotIn("Jane", json.dumps(batch.sheets))
+        self.assertEqual(len(batch.person_tokens), 1)
 
 
 class ProjectionTests(TestCase):
@@ -91,7 +138,10 @@ class ProjectionTests(TestCase):
         )
         for code, amount in {"salaries": 60000, "fringe": 5000, "travel": 5000, "supplies": 2000, "fa": 20000}.items():
             BudgetLine.objects.create(worktag=self.fund, category=cat[code], amount=amount)
-        gra = PersonType.objects.create(name="Test GRA", fringe_rate=Decimal("7.9"), tuition_monthly=Decimal("1596"))
+        gra = PersonType.objects.create(name="Test GRA")
+        FiscalYearRate.objects.create(
+            person_type=gra, fiscal_year=2027, fringe_rate=Decimal("7.9"), tuition_monthly=Decimal("1596")
+        )
         self.person = Person.objects.create(alias="JD", person_type=gra)
         Appointment.objects.create(
             person=self.person, worktag=self.fund, start_date=dt.date(2026, 8, 1), end_date=dt.date(2026, 12, 31),
@@ -114,7 +164,7 @@ class ProjectionTests(TestCase):
         self.assertEqual(self.line(s, "fa").planned, Decimal("5395.00"))
         self.assertEqual(s.total.budget, Decimal("92000"))
         self.assertEqual(s.total.projected_remaining, Decimal("62288.75"))
-        self.assertEqual(s.burn_rate, Decimal("924.38"))  # Aug spending / 6 complete months
+        self.assertEqual(s.burn_rate, Decimal("5546.25"))  # spending began in Aug: averaged over Aug only
         self.assertFalse(any(a.level == "danger" for a in s.alerts))
 
     def test_pending_counts_and_overspend_alert(self):
@@ -131,3 +181,67 @@ class ProjectionTests(TestCase):
         s = summarize_fund(self.fund, today=self.today)
         self.assertEqual(self.line(s, "fa").actual, Decimal("1848.75"))
         self.assertTrue(any("ignored" in a.message for a in s.alerts))
+
+    def test_rates_follow_fiscal_year_and_reuse_latest(self):
+        FiscalYearRate.objects.create(
+            person_type=self.person.person_type, fiscal_year=2028, fringe_rate=Decimal("10"), tuition_monthly=Decimal("2000")
+        )
+        fund = Worktag.objects.create(code="GR2", name="Two", start_date=dt.date(2027, 1, 1), end_date=dt.date(2029, 6, 30))
+        # June 2027 is FY2027, July 2027 is FY2028, July 2028 is FY2029 (not entered: reuses FY2028).
+        for start, end in [(dt.date(2027, 6, 1), dt.date(2027, 6, 30)), (dt.date(2027, 7, 1), dt.date(2027, 7, 31)),
+                           (dt.date(2028, 7, 1), dt.date(2028, 7, 31))]:
+            Appointment.objects.create(person=self.person, worktag=fund, start_date=start, end_date=end,
+                                       monthly_salary=Decimal("1000"))
+        s = summarize_fund(fund, today=self.today)
+        self.assertEqual(self.line(s, "salaries").planned, Decimal("3000.00"))
+        self.assertEqual(self.line(s, "fringe").planned, Decimal("279.00"))  # 79 + 100 + 100
+        self.assertEqual(self.line(s, "tuition").planned, Decimal("5596.00"))  # 1596 + 2000 + 2000
+        self.assertTrue(any("FY2029" in a.message and "FY2028" in a.message for a in s.alerts))
+
+    def test_unlinked_fringe_row_suppresses_estimate(self):
+        # A fringe line with no person in August covers everyone's fringe that month.
+        Transaction.objects.create(worktag=self.fund, category=self.cat["fringe"], date=dt.date(2026, 8, 31), amount=Decimal("300"))
+        s = summarize_fund(self.fund, today=self.today)
+        self.assertEqual(self.line(s, "fringe").actual, Decimal("300.00"))
+        self.assertEqual(self.line(s, "fringe").estimated, Decimal("0.00"))
+
+    def test_runway_and_burn_with_tiny_spending(self):
+        fund = Worktag.objects.create(code="GR9", name="Huge", start_date=dt.date(2020, 1, 1))
+        BudgetLine.objects.create(worktag=fund, category=self.cat["other"], amount=Decimal("900000000"))
+        Transaction.objects.create(worktag=fund, category=self.cat["other"], date=dt.date(2026, 7, 3), amount=Decimal("0.05"))
+        s = summarize_fund(fund, today=self.today)  # must not overflow date arithmetic
+        self.assertEqual(s.burn_rate, Decimal("0.03"))  # averaged from first spending month (Jul, Aug), not six
+        self.assertIsNone(s.run_out_date)
+        self.assertGreater(s.runway_months, 1200)
+
+    def test_past_planned_months_alert(self):
+        fund = Worktag.objects.create(code="GR3", name="Three")
+        Appointment.objects.create(person=self.person, worktag=fund, start_date=dt.date(2026, 5, 1),
+                                   end_date=dt.date(2026, 12, 31), monthly_salary=Decimal("1000"))
+        s = summarize_fund(fund, today=self.today)
+        self.assertTrue(any("4 past months (May 2026 – Aug 2026)" in a.message for a in s.alerts))
+
+    def test_estimated_fringe_uses_fiscal_year_of_pay_month(self):
+        FiscalYearRate.objects.create(person_type=self.person.person_type, fiscal_year=2026, fringe_rate=Decimal("5"))
+        Transaction.objects.create(worktag=self.fund, category=self.cat["salaries"], person=self.person,
+                                   date=dt.date(2026, 6, 30), amount=Decimal("1000"))
+        s = summarize_fund(self.fund, today=self.today)
+        # June 2026 at FY2026's 5% plus August 2026 at FY2027's 7.9%.
+        self.assertEqual(self.line(s, "fringe").actual, Decimal("247.50"))
+
+
+class RateTableTests(SimpleTestCase):
+    def test_fiscal_year_boundaries(self):
+        self.assertEqual(fiscal_year(dt.date(2026, 6, 30)), 2026)
+        self.assertEqual(fiscal_year(dt.date(2026, 7, 1)), 2027)
+
+    def test_lookup_reuses_closest_earlier_year(self):
+        table = RateTable([
+            FiscalYearRate(person_type_id=1, fiscal_year=2025, fringe_rate=Decimal("31.7"), tuition_monthly=None),
+            FiscalYearRate(person_type_id=1, fiscal_year=2027, fringe_rate=Decimal("33"), tuition_monthly=Decimal("0")),
+        ])
+        self.assertEqual(table.lookup(1, "fringe_rate", 2026), (Decimal("31.7"), 2025))
+        self.assertEqual(table.lookup(1, "fringe_rate", 2030), (Decimal("33"), 2027))
+        self.assertEqual(table.lookup(1, "fringe_rate", 2020), (Decimal("31.7"), 2025))
+        self.assertEqual(table.lookup(1, "tuition_monthly", 2026), (Decimal("0"), 2027))
+        self.assertEqual(table.lookup(2, "fringe_rate", 2027), (Decimal("0"), None))

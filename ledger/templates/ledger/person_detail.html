@@ -49,8 +49,8 @@
           <td class="nowrap">{{ a.start_date|date:"M j, Y" }} – {{ a.end_date|date:"M j, Y" }}</td>
           <td class="num">{{ a.monthly_salary|money }}</td>
           <td class="num">{{ a.effort_pct|trim_decimal }}%</td>
-          <td class="num">{{ a.fringe_rate|trim_decimal }}%</td>
-          <td class="num">{{ a.tuition_monthly|money }}</td>
+          <td class="num">{% if a.fringe_rate_override is not None %}{{ a.fringe_rate_override|trim_decimal }}%{% else %}<a class="sub" href="{% url 'ledger:settings' %}#rates">by fiscal year</a>{% endif %}</td>
+          <td class="num">{% if a.tuition_monthly_override is not None %}{{ a.tuition_monthly_override|money }}{% else %}<a class="sub" href="{% url 'ledger:settings' %}#rates">by fiscal year</a>{% endif %}</td>
           <td class="row-actions"><a href="{% url 'ledger:appointment_edit' a.pk %}">Edit</a></td>
         </tr>
       {% empty %}

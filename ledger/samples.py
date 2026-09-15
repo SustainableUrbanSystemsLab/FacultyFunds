@@ -22,8 +22,9 @@ WORKDAY_ROWS = [
 ]
 
 
-def workday_expense_xlsx() -> bytes:
+def workday_expense_xlsx(rows=None) -> bytes:
     """Looks like a Workday 'Export to Excel': title rows, then a header row, then a total row."""
+    rows = WORKDAY_ROWS if rows is None else rows
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = "Find Expense Reports"
@@ -32,9 +33,9 @@ def workday_expense_xlsx() -> bytes:
     sheet.append([])
     sheet.append(["Expense Report", "Worker", "Expense Report Date", "Expense Item", "Memo", "Worktags",
                   "Total Amount", "Expense Report Status"])
-    for row in WORKDAY_ROWS:
+    for row in rows:
         sheet.append(list(row))
-    sheet.append(["Total", "", "", "", "", "", sum(r[6] for r in WORKDAY_ROWS), ""])
+    sheet.append(["Total", "", "", "", "", "", sum(r[6] for r in rows), ""])
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()

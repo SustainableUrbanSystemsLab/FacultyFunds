@@ -18,7 +18,7 @@ A private web app for tracking your own faculty funds when you don't have direct
 
 Requires [uv](https://docs.astral.sh/uv/).
 
-A git-ignored `.env` with `DJANGO_DEBUG=1` and random local keys is already in place. On a fresh clone, copy `.env.example` to `.env` and fill in the keys.
+Copy `.env.example` to `.env`, set `DJANGO_DEBUG=1`, and fill in `DJANGO_SECRET_KEY` and `PII_HMAC_KEY` with long random strings.
 
 ```bash
 uv sync
@@ -34,12 +34,14 @@ To try it with fake data, run `uv run python manage.py seed_demo`. It adds two e
 ## Typical workflow
 
 1. **Add your funds:** go to Funds → Add fund. Enter the worktag ID exactly as Workday shows it (e.g. `GR00012345`). Under "Other IDs", add the award ID (`AWD…`) or OneUSG project code so payroll rows match too. Then enter the budget per category and the F&A rate.
-2. **Set rates:** under Settings, check the fringe rates and monthly tuition remission for each person type. The defaults are Georgia Tech's FY2025 values, so verify the current ones.
+2. **Set rates:** under Settings → Fringe and tuition rates by fiscal year, enter each year's fringe rate and monthly tuition remission for each person type. Fiscal years run July–June, so FY2027 is July 2026 to June 2027. A year left blank reuses the closest earlier year. The defaults are Georgia Tech's FY2025 values.
 3. **Import reports:** go to Import, choose the file type, and upload.
    - The first time you import a layout, match the columns: date, amount, worktag columns, person, status, and so on.
-   - Rows with statuses like Draft or Canceled are skipped by default.
+   - Rows with statuses like Draft or Canceled are skipped by default. If a report you imported earlier now shows a skipped status (cancelled, sent back), importing the newer file removes the earlier transaction so it stops counting.
+   - Total and subtotal rows are skipped automatically.
    - For a worksheet with one column per month, select all of the month columns as "Amount".
    - The preview shows what will be imported, what's a duplicate, and which worktag IDs you don't track yet.
+   - Re-import cumulative exports (e.g. all expense reports year-to-date) as often as you like: rows already in the ledger are skipped. One caveat: if a report's *amount* changes between exports (a line edited before approval), the new amount is imported as a new row, so delete the old one under Transactions.
 4. **Review:** rows with no matching fund or category rule land in Review. Add the fund or a keyword rule and click "Re-run matching", or assign rows in bulk.
 5. **Plan:** add appointments for people paid from each fund (start and end, monthly salary, effort %), and pending entries for known upcoming costs.
 6. **Watch the dashboard:** it shows alerts, projected balances, burn rate, and runway for each fund. Each fund page has a spending chart and a CSV export.
@@ -49,14 +51,15 @@ To try it with fake data, run `uv run python manage.py seed_demo`. It adds two e
 | Piece | Rule |
 |---|---|
 | Actuals | Imported and manual transactions. Uncategorized amounts count as "Other" until you fix them. |
-| Fringe on actuals | Payroll salary with no fringe line for that person and month gets fringe estimated from their rate. |
+| Rates | Fringe and tuition come from the person type's rate for the fiscal year (July–June) each month falls in. A missing year reuses the closest earlier year and shows an alert. |
+| Fringe on actuals | Payroll salary with no fringe line for that person and month gets fringe estimated at that month's fiscal-year rate. |
 | Planned payroll | Each appointment month *without* a salary actual for that person on that fund: salary × effort (prorated for partial months), plus fringe. |
-| Tuition | Monthly tuition remission × effort, for months without a tuition actual. |
+| Tuition | That fiscal year's monthly tuition remission × effort, for months without a tuition actual. |
 | Pending | Pending entries count until they're reconciled or cancelled. |
 | F&A | Fund rate × spending in categories marked "Subject to F&A". It applies to actual, pending, and planned amounts. |
-| Burn rate | Average monthly actual spending over the last 6 complete months. Runway = (budget − spent − pending) ÷ burn rate. |
+| Burn rate | Average monthly actual spending over the last 6 complete months (fewer if the fund or its spending started more recently). Runway = (budget − spent − pending) ÷ burn rate. |
 
-Known simplifications: the $25k-per-subaward MTDC cap and multi-year budget periods aren't modeled, and fringe rates don't change by fiscal year.
+Known simplifications: the $25k-per-subaward MTDC cap and multi-year budget periods aren't modeled; each fund has a single F&A rate; payroll actuals count in the month of the row's date (usually the pay period end).
 
 ## Deploy to a cloud host
 
@@ -88,7 +91,8 @@ Health checks can use `/healthz`. The Django admin is at `/admin/` (change it wi
 - Until 2FA is set up, the password alone can enroll an authenticator. Enroll immediately after `createsuperuser`.
 - Lost your phone and backup codes? Run `python manage.py reset_2fa <username>` from the host shell, then enroll again right away.
 - After 5 failed logins from the same IP for the same username, logins are locked for 1 hour. Sessions end after 2 hours idle or when the browser closes.
-- Uploaded files are read in memory and never written to disk. Staged import data is deleted when you confirm or cancel, or after 24 hours.
+- Uploaded files are read in memory and never written to disk; requests over the size limit are refused before parsing. Staged import data (already pseudonymized) is deleted when you confirm or cancel, or after 24 hours.
+- Names in columns the app doesn't recognize as people columns are only pseudonymized once you map that column as "Person". Names embedded in free-text cells are masked only when the same row also has a recognized name column.
 
 ## Development
 

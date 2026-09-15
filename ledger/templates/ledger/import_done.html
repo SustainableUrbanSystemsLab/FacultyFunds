@@ -25,6 +25,7 @@
 <div class="kpis">
   <div class="kpi"><span>{% if s.import_as == 'pending' %}Pending entries{% else %}Transactions{% endif %} added</span><strong>{{ s.created }}</strong><small>{{ s.total|money_cents }}</small></div>
   <div class="kpi"><span>Duplicates skipped</span><strong>{{ s.duplicates }}</strong></div>
+  {% if s.removed %}<div class="kpi"><span>Removed as cancelled</span><strong class="neg">{{ s.removed }}</strong><small>earlier transactions</small></div>{% endif %}
   <div class="kpi"><span>Without fund</span><strong>{{ s.no_fund|add:s.skipped_no_fund }}</strong>{% if s.no_fund %}<small><a href="{% url 'ledger:review' %}">Review</a></small>{% endif %}</div>
   <div class="kpi"><span>Without category</span><strong>{{ s.no_category }}</strong></div>
   <div class="kpi"><span>New people</span><strong>{{ s.new_people }}</strong>{% if s.new_people %}<small><a href="{% url 'ledger:people' %}">Set their type</a></small>{% endif %}</div>

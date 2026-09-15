@@ -14,9 +14,16 @@
   </div>
 </div>
 
+<p class="notice{% if as_pending %} notice-warn{% endif %}">
+  Rows will be imported as <strong>{% if as_pending %}pending entries{% else %}actual spending{% endif %}</strong>{% if batch.profile %} (from the saved mapping){% endif %}.
+  {% if as_pending %}They count against the fund until you reconcile or cancel them.{% endif %}
+  <a href="{% url 'ledger:import_map' batch.pk %}">Change</a>
+</p>
+
 <div class="kpis">
   <div class="kpi"><span>Will import</span><strong>{{ summary.importable }}</strong><small>{{ summary.total|money_cents }}</small></div>
   <div class="kpi"><span>Duplicates skipped</span><strong>{{ summary.duplicates }}</strong><small>already imported</small></div>
+  {% if summary.stale %}<div class="kpi"><span>Cancelled since import</span><strong class="neg">{{ summary.stale }}</strong><small>earlier transactions removed</small></div>{% endif %}
   <div class="kpi"><span>Other rows skipped</span><strong>{{ summary.skipped.values|sum_values }}</strong></div>
   <div class="kpi"><span>Without fund</span><strong>{{ summary.no_fund }}</strong><small>go to Review</small></div>
   <div class="kpi"><span>Without category</span><strong>{{ summary.no_category }}</strong></div>
@@ -43,11 +50,15 @@
 </section>
 {% endif %}
 
-<form method="post" action="{% url 'ledger:import_commit' batch.pk %}" class="card commit-bar">
+{% if summary.stale %}
+<p class="notice notice-warn small">{{ summary.stale }} row{{ summary.stale|pluralize }} imported earlier now {{ summary.stale|pluralize:"has,have" }} a skipped status (cancelled, sent back, …). Importing removes {{ summary.stale|pluralize:"that earlier transaction,those earlier transactions" }} so the spending no longer counts. Undo won't bring them back; re-import the older file if needed.</p>
+{% endif %}
+
+<form method="post" action="{% url 'ledger:import_commit' batch.pk %}" class="card commit-bar" data-single-submit>
   {% csrf_token %}
   <label class="inline"><input type="checkbox" name="save_profile"{% if not batch.profile %} checked{% endif %}> Save this column mapping as</label>
   <input type="text" name="profile_name" value="{{ batch.profile.name|default:batch.filename }}" maxlength="120" aria-label="Mapping name">
-  <button class="btn btn-primary" type="submit"{% if not summary.importable %} disabled{% endif %}>Import {{ summary.importable }} row{{ summary.importable|pluralize }}</button>
+  <button class="btn btn-primary" type="submit"{% if not summary.importable and not summary.stale %} disabled{% endif %}>Import {{ summary.importable }} row{{ summary.importable|pluralize }}</button>
 </form>
 
 <section class="card flush">
@@ -59,7 +70,7 @@
       {% for r in records %}
         <tr class="{% if r.skip_reason or r.duplicate %}row-muted{% endif %}">
           <td class="rownum">{{ r.line }}{% if r.column_label %}<div class="sub">{{ r.column_label }}</div>{% endif %}</td>
-          <td>{% if r.duplicate %}<span class="badge">duplicate</span>{% elif r.skip_reason %}<span class="badge badge-warn">{{ r.skip_reason }}</span>{% else %}<span class="badge badge-ok">import</span>{% endif %}</td>
+          <td>{% if r.duplicate %}<span class="badge">duplicate</span>{% elif r.stale_existing %}<span class="badge badge-danger" title="Imported earlier; now {{ r.raw_status }}. The earlier transaction is removed.">removes earlier import</span>{% elif r.skip_reason %}<span class="badge badge-warn">{{ r.skip_reason }}</span>{% else %}<span class="badge badge-ok">import</span>{% endif %}</td>
           <td class="nowrap">{{ r.date|date:"Y-m-d"|default:"—" }}</td>
           <td class="num nowrap {{ r.amount|neg_class }}">{{ r.amount|money_cents }}{% if r.kind == 'fringe' %}<div class="sub">fringe</div>{% endif %}</td>
           <td>{% if r.worktag %}{{ r.worktag.code }}{% else %}<span class="badge badge-warn" title="{{ r.worktag_note }}">none</span>{% endif %}</td>

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Request too large{% endblock %}
+{% block main_class %}auth{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1>That request couldn't be processed</h1>
+  <p class="muted">It was too large or malformed. Uploads are limited to 10 MB; export a shorter date range and try again.</p>
+  <p class="auth-alt"><a href="/">Back to funds</a></p>
+</div>
+{% endblock %}

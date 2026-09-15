@@ -19,10 +19,11 @@ NAME_HEADERS = {
     "person", "full name", "emp name", "empl name", "employee full name", "worker name", "person name",
     "submitted by", "created by", "requester", "requestor", "preparer", "expense report owner",
     "cardholder", "card holder", "last name", "first name", "preferred name", "legal name",
-    "on behalf of", "name last first",
+    "on behalf of", "name last first", "manager", "supervisor", "approver", "approved by", "reports to",
+    "principal investigator", "pi name", "student", "student name", "postdoc", "recipient", "paid to",
 }
 NAME_HINTS = ("employee name", "worker name", "person name", "full name", "last name", "first name",
-              "preferred name", "legal name", "cardholder")
+              "preferred name", "legal name", "cardholder", "manager name", "supervisor name", "approver name")
 ID_HEADERS = {
     "emplid", "empl id", "emp id", "employee id", "worker id", "person id", "gtid", "gt id", "student id",
     "id", "employee number", "empl no", "ssn", "social security number", "national id", "badge id",
@@ -31,6 +32,11 @@ NOT_PERSON_WORDS = ("cost center", "grant", "gift", "project", "program", "fund"
                     "category", "account", "department", "dept", "company", "report", "item", "sponsor",
                     "award", "position", "job", "earn", "combo", "budget", "file", "sheet", "type", "run")
 
+# Values that show up in people columns but aren't people: totals, placeholders, vacant positions.
+NOT_A_PERSON = {
+    "total", "totals", "grand total", "subtotal", "sub total", "sum", "vacant", "vacant position", "n/a", "na",
+    "none", "null", "tbd", "tba", "unknown", "various", "multiple", "all", "-", "--", "—",
+}
 TOKEN_PATTERN = re.compile(r"^(?:[A-Z]{1,2}|ID)#[0-9a-f]{10}$")
 _ID_IN_NAME = re.compile(r"\(\s*(\d{4,})\s*\)")
 _SSN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
@@ -86,17 +92,20 @@ def split_name(value: str) -> tuple[str, str]:
 
 def pseudonymize(value: str, kind: str) -> tuple[str, dict] | None:
     text = value.strip()
-    if not text:
+    if not text or text.lower().rstrip(":") in NOT_A_PERSON:
         return None
     if kind == "id":
         digits = re.sub(r"\D", "", text)
-        normalized = (digits.lstrip("0") or "0") if digits else text.lower()
+        if len(digits) < 3:  # "N/A", "-", "none": not an identifier
+            return None
+        normalized = digits.lstrip("0") or "0"
         key = keyed_hash("id", normalized)
         return f"ID#{key[:10]}", {"key": key, "kind": "id", "initials": ""}
 
     first, last = split_name(text)
     if not first and not last:
-        return None
+        # A "name" column holding bare numbers is really an ID column.
+        return pseudonymize(text, "id") if re.search(r"\d{3,}", text) else None
     key = keyed_hash("name", f"{first} {last}".strip())
     initials = (first[:1] + last[:1]).upper()
     info = {"key": key, "kind": "name", "initials": initials}
@@ -115,13 +124,17 @@ def _name_pattern(value: str) -> re.Pattern | None:
     return re.compile(rf"\b{f}{middle}\s+{l}\b|\b{l}\s*,\s*{f}{middle}\b", re.IGNORECASE)
 
 
-def scrub_rows(rows: list[list[str]], header_index: int) -> tuple[list[list[str]], dict, list[int]]:
+def scrub_rows(
+    rows: list[list[str]], header_index: int, extra_cols: dict[int, str] | None = None
+) -> tuple[list[list[str]], dict, list[int]]:
     """Pseudonymize person columns below the header row.
 
+    `extra_cols` ({column index: "name" | "id"}) adds columns the header scan didn't recognize.
     Returns (rows, tokens, person column indexes). `tokens` maps token -> key info.
     """
     headers = rows[header_index] if header_index < len(rows) else []
     person_cols = {i: kind for i, header in enumerate(headers) if (kind := classify_header(header))}
+    person_cols.update(extra_cols or {})
     tokens: dict[str, dict] = {}
     out = [list(row) for row in rows]
 
