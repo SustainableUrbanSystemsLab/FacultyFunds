@@ -8,7 +8,7 @@
 </div>
 
 <form method="get" class="filters card">
-  <input type="search" name="q" value="{{ params.q }}" placeholder="Search description, reference, worktags" aria-label="Search">
+  <input type="search" name="q" value="{{ params.q }}" placeholder="Search description, reference, worktags" aria-label="Search transactions" title="Search transactions" spellcheck="false" autocomplete="off">
   <select name="fund" aria-label="Fund">
     <option value="">All funds</option>
     <option value="none"{% if params.fund == "none" %} selected{% endif %}>No fund</option>
@@ -52,7 +52,7 @@
           <td class="row-actions"><a href="{% url 'ledger:transaction_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">Edit</a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="9" class="muted">No transactions match.</td></tr>
+        <tr><td colspan="9" class="muted">{% if params.q %}No transactions match “{{ params.q }}”. Check for typos or <a href="?">clear the filters</a>.{% elif params %}No transactions match these filters. <a href="?">Clear filters</a>{% else %}No transactions yet. Import a report to get started.{% endif %}</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -1,0 +1,1 @@
+{% if level == "danger" or level == "warn" or level == "warning" or level == "error" %}{% include "partials/icon.html" with name="exclamation-triangle" %}{% elif level == "success" %}{% include "partials/icon.html" with name="check-circle" %}{% else %}{% include "partials/icon.html" with name="information-circle" %}{% endif %}

@@ -4,39 +4,56 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}Faculty Budget{% endblock %} · Faculty Budget</title>
+  <script src="{% static 'js/theme.js' %}"></script>
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <script src="{% static 'js/app.js' %}" defer></script>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 {% if user.is_authenticated and user.is_verified %}
-  <header class="topbar">
-    <a class="brand" href="{% url 'ledger:dashboard' %}">Faculty Budget</a>
-    {% with n=request.resolver_match.url_name|default:"" %}
-    <nav class="mainnav" aria-label="Main">
-      <a href="{% url 'ledger:dashboard' %}"{% if n == 'dashboard' or 'fund' in n %} aria-current="page"{% endif %}>Funds</a>
-      <a href="{% url 'ledger:review' %}"{% if n == 'review' %} aria-current="page"{% endif %}>Review{% if nav_review_count %} <span class="count">{{ nav_review_count }}</span>{% endif %}</a>
-      <a href="{% url 'ledger:transactions' %}"{% if 'transaction' in n %} aria-current="page"{% endif %}>Transactions</a>
-      <a href="{% url 'ledger:pending' %}"{% if 'pending' in n %} aria-current="page"{% endif %}>Pending</a>
-      <a href="{% url 'ledger:people' %}"{% if 'person' in n or 'people' in n or 'appointment' in n %} aria-current="page"{% endif %}>People</a>
-      <a href="{% url 'ledger:imports' %}"{% if 'import' in n %} aria-current="page"{% endif %}>Import{% if nav_staged_count %} <span class="count">{{ nav_staged_count }}</span>{% endif %}</a>
-      <a href="{% url 'ledger:settings' %}"{% if 'setting' in n or 'profile' in n %} aria-current="page"{% endif %}>Settings</a>
-    </nav>
-    {% endwith %}
-    <div class="usermenu">
-      <a href="{% url 'accounts:security' %}">Security</a>
-      <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit" class="linklike">Sign out</button></form>
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="{% url 'ledger:dashboard' %}" title="Faculty Budget: go to funds">
+        <img class="brand-logo" src="{% static 'img/logo.svg' %}" alt="" width="36" height="36">
+        <span class="wordmark"><strong>Faculty</strong> <span>Budget</span></span>
+      </a>
+      {% with n=request.resolver_match.url_name|default:"" %}
+      <nav class="mainnav" aria-label="Main">
+        <a href="{% url 'ledger:dashboard' %}"{% if n == 'dashboard' or 'fund' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="banknotes" %}<span>Funds</span></a>
+        <a href="{% url 'ledger:review' %}"{% if n == 'review' %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="inbox-arrow-down" %}<span>Review</span>{% if nav_review_count %}<span class="count" title="{{ nav_review_count }} to review">{{ nav_review_count }}</span>{% endif %}</a>
+        <a href="{% url 'ledger:transactions' %}"{% if 'transaction' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="queue-list" %}<span>Transactions</span></a>
+        <a href="{% url 'ledger:pending' %}"{% if 'pending' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="clock" %}<span>Pending</span></a>
+        <a href="{% url 'ledger:people' %}"{% if 'person' in n or 'people' in n or 'appointment' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="users" %}<span>People</span></a>
+        <a href="{% url 'ledger:imports' %}"{% if 'import' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="arrow-up-tray" %}<span>Import</span>{% if nav_staged_count %}<span class="count" title="{{ nav_staged_count }} waiting">{{ nav_staged_count }}</span>{% endif %}</a>
+        <a href="{% url 'ledger:settings' %}"{% if 'setting' in n or 'profile' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="cog-6-tooth" %}<span>Settings</span></a>
+      </nav>
+      {% endwith %}
+      <div class="usermenu">
+        <a class="icon-btn" href="{% url 'accounts:security' %}" title="Security: 2FA, backup codes, password" aria-label="Security settings">{% include "partials/icon.html" with name="shield-check" %}</a>
+        {% include "partials/theme_toggle.html" %}
+        <form method="post" action="{% url 'accounts:logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="icon-btn" title="Sign out" aria-label="Sign out">{% include "partials/icon.html" with name="arrow-right-start-on-rectangle" %}</button>
+        </form>
+      </div>
     </div>
   </header>
 {% endif %}
-<main class="{% block main_class %}container{% endblock %}">
+<main id="main-content" tabindex="-1" class="{% block main_class %}container{% endblock %}">
   {% if messages %}
     <ul class="messages">
-      {% for message in messages %}<li class="msg msg-{{ message.tags|default:'info' }}">{{ message }}</li>{% endfor %}
+      {% for message in messages %}<li class="msg msg-{{ message.tags|default:'info' }}">{% include "partials/alert_icon.html" with level=message.tags %}<span>{{ message }}</span></li>{% endfor %}
     </ul>
   {% endif %}
   {% block content %}{% endblock %}
 </main>
+{% if user.is_authenticated and user.is_verified %}
+  <footer class="site-footer">
+    <div class="site-footer-inner">Faculty Budget · <a href="https://github.com/SustainableUrbanSystemsLab/facultybudget">Source on GitHub</a></div>
+  </footer>
+{% endif %}
 </body>
 </html>

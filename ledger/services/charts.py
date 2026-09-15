@@ -66,6 +66,12 @@ def burn_chart(summary: FundSummary, today: dt.date | None = None, width: int = 
     def path(points):
         return "M" + " L".join(f"{x(m):.1f},{y(v):.1f}" for m, v in points) if points else ""
 
+    area = ""
+    if len(actual_points) > 1:
+        baseline = top + plot_h
+        first_x, last_x = x(actual_points[0][0]), x(actual_points[-1][0])
+        area = f"{path(actual_points)} L{last_x:.1f},{baseline:.1f} L{first_x:.1f},{baseline:.1f} Z"
+
     label_every = max(1, round(len(months) / 6))
     return {
         "width": width,
@@ -75,6 +81,7 @@ def burn_chart(summary: FundSummary, today: dt.date | None = None, width: int = 
         "plot_bottom": top + plot_h,
         "budget_y": round(y(summary.total.budget), 1) if summary.total.budget else None,
         "actual_path": path(actual_points),
+        "actual_area": area,
         "projected_path": path(projected_points),
         "today_x": round(x(current), 1) if start <= current <= end else None,
         "x_ticks": [(round(x(m), 1), f"{m:%b %y}") for i, m in enumerate(months) if i % label_every == 0],

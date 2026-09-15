@@ -3,6 +3,7 @@
 {% block main_class %}auth{% endblock %}
 {% block content %}
 <div class="auth-card auth-wide">
+  {% include "partials/brand.html" %}
   <h1>{% if replacing %}Replace authenticator{% else %}Set up two-factor authentication{% endif %}</h1>
   {% if replacing %}
     <p class="notice notice-warn">Confirming a new code removes your current authenticator.</p>

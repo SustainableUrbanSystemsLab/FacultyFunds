@@ -13,13 +13,13 @@
     </p>
   </div>
   <div class="actions">
-    <a class="btn" href="{% url 'ledger:fund_export' worktag.pk %}">Export CSV</a>
-    <a class="btn btn-primary" href="{% url 'ledger:fund_edit' worktag.pk %}">Edit fund &amp; budget</a>
+    <a class="btn" href="{% url 'ledger:fund_export' worktag.pk %}">{% include "partials/icon.html" with name="arrow-down-tray" %}Export CSV</a>
+    <a class="btn btn-primary" href="{% url 'ledger:fund_edit' worktag.pk %}">{% include "partials/icon.html" with name="pencil-square" %}Edit fund &amp; budget</a>
   </div>
 </div>
 
 {% if summary.alerts %}
-<section class="alerts">{% for alert in summary.alerts %}<div class="alert alert-{{ alert.level }}">{{ alert.message }}</div>{% endfor %}</section>
+<section class="alerts">{% for alert in summary.alerts %}<div class="alert alert-{{ alert.level }}">{% include "partials/alert_icon.html" with level=alert.level %}<span>{{ alert.message }}</span></div>{% endfor %}</section>
 {% endif %}
 
 {% with t=summary.total %}
