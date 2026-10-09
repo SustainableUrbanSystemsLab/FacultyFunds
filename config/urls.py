@@ -5,8 +5,8 @@ from django_otp.admin import OTPAdminSite
 
 # The admin also requires a verified second factor.
 admin.site.__class__ = OTPAdminSite
-admin.site.site_header = "Faculty Budget admin"
-admin.site.site_title = "Faculty Budget admin"
+admin.site.site_header = "Faculty Funds admin"
+admin.site.site_title = "Faculty Funds admin"
 
 urlpatterns = [
     path("accounts/", include("accounts.urls")),

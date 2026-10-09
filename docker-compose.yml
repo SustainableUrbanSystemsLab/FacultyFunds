@@ -1,0 +1,44 @@
+# Docker Compose deployment: app + Postgres. All secrets come from a local, git-ignored .env file
+# (copy .env.docker.example to .env). Nothing sensitive lives in this file.
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: facultyfunds
+      POSTGRES_USER: facultyfunds
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U facultyfunds"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    # Prebuilt image from GitHub Actions; `docker compose build` still builds locally from the Dockerfile.
+    image: ghcr.io/sustainableurbansystemslab/facultyfunds:${IMAGE_TAG:-latest}
+    build: .
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"  # lets Watchtower (label-enable mode) redeploy on a new :latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+      PII_HMAC_KEY: ${PII_HMAC_KEY:?set PII_HMAC_KEY in .env}
+      DATABASE_URL: postgres://facultyfunds:${POSTGRES_PASSWORD}@db:5432/facultyfunds
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:?set DJANGO_ALLOWED_HOSTS in .env}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:?set DJANGO_CSRF_TRUSTED_ORIGINS in .env}
+      AXES_PROXY_COUNT: "1"
+      TIME_ZONE: ${TIME_ZONE:-America/New_York}
+    # Loopback only: put a TLS-terminating reverse proxy in front. Set BIND=0.0.0.0 only if
+    # the proxy runs on another machine.
+    ports:
+      - "${BIND:-127.0.0.1}:${HOST_PORT:-8020}:8000"
+
+volumes:
+  pgdata:

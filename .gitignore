@@ -10,3 +10,15 @@ staticfiles/
 # Real exports contain financial and personnel data: never commit them.
 samples/*
 !samples/README.md
+
+# Secrets, DB dumps and backups: never commit.
+.env.*
+!.env.example
+!.env.docker.example
+*.sql
+*.dump
+*.sql.gz
+backups/
+
+# Private deployment notes
+*.local.md

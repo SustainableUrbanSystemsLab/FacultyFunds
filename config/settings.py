@@ -1,4 +1,4 @@
-"""Django settings for Faculty Budget.
+"""Django settings for Faculty Funds.
 
 Deployment-specific values come from environment variables (see .env.example).
 For local development a `.env` file in the project root is loaded if present.
@@ -203,7 +203,7 @@ if not DEBUG and not TESTING:
     SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", 60 * 60 * 24 * 365))
 
 # Two-factor authentication
-OTP_TOTP_ISSUER = os.environ.get("OTP_ISSUER", "Faculty Budget")
+OTP_TOTP_ISSUER = os.environ.get("OTP_ISSUER", "Faculty Funds")
 
 # Login lockout (django-axes): 5 failures per username+IP locks for 1 hour.
 AXES_FAILURE_LIMIT = 5

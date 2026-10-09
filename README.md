@@ -1,4 +1,4 @@
-# Faculty Budget
+# Faculty Funds
 
 A private web app for tracking your own faculty funds when you don't have direct access to the balances. It is built around **Workday** (expense reports, worktags) and **OneUSG Connect** (PeopleSoft payroll) exports.
 
@@ -85,6 +85,36 @@ python manage.py createsuperuser
 Health checks can use `/healthz`. The Django admin is at `/admin/` (change it with `DJANGO_ADMIN_URL`) and also requires 2FA.
 
 **Backups:** turn on your database provider's automatic backups. Losing the database means re-entering budgets and plans. Transactions can be re-imported.
+
+## Deploy with Docker Compose
+
+`docker-compose.yml` runs the app plus Postgres, with data in a named volume. It works on any Docker host.
+
+1. Copy the project to the host.
+2. Create your secrets file. `.env` is git-ignored and excluded from the image:
+
+   ```bash
+   cp .env.docker.example .env
+   # fill in POSTGRES_PASSWORD, DJANGO_SECRET_KEY, PII_HMAC_KEY and your hostname
+   ```
+
+3. Start it and create your account:
+
+   ```bash
+   docker compose up -d --build
+   docker compose exec web python manage.py createsuperuser
+   ```
+
+4. **Put HTTPS in front.** Production mode sets secure-only cookies and redirects to HTTPS, so login fails over plain HTTP. The app listens on `127.0.0.1:8020` only; point a TLS-terminating reverse proxy at it.
+5. Open the site and enroll 2FA right away.
+
+**Backups** (keep dumps out of the repo; `*.sql`, `*.dump` and `backups/` are git-ignored):
+
+```bash
+docker compose exec -T db pg_dump -U facultyfunds facultyfunds | gzip > backups/ff-$(date +%F).sql.gz
+```
+
+Also back up `.env` (especially `PII_HMAC_KEY`) separately from the database dump. Update with `docker compose pull && docker compose up -d`, or `docker compose up -d --build` to build locally.
 
 ### Security notes
 
