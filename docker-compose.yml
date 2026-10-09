@@ -17,6 +17,8 @@ services:
       retries: 5
 
   web:
+    # Prebuilt image from GitHub Actions; `docker compose build` still builds locally from the Dockerfile.
+    image: ghcr.io/sustainableurbansystemslab/facultybudget:${IMAGE_TAG:-latest}
     build: .
     restart: unless-stopped
     depends_on:
