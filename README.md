@@ -86,6 +86,36 @@ Health checks can use `/healthz`. The Django admin is at `/admin/` (change it wi
 
 **Backups:** turn on your database provider's automatic backups. Losing the database means re-entering budgets and plans. Transactions can be re-imported.
 
+## Deploy on a NAS (Docker Compose)
+
+Works on Synology (Container Manager), QNAP (Container Station), Unraid, TrueNAS, or any Docker host. `docker-compose.yml` runs the app plus Postgres, with data in a named volume.
+
+1. Get the code onto the NAS (`git clone` over SSH, or copy the folder).
+2. Create your secrets file. `.env` is git-ignored and excluded from the image:
+
+   ```bash
+   cp .env.nas.example .env
+   # fill in POSTGRES_PASSWORD, DJANGO_SECRET_KEY, PII_HMAC_KEY, hostname
+   ```
+
+3. Start it:
+
+   ```bash
+   docker compose up -d --build
+   docker compose exec web python manage.py createsuperuser
+   ```
+
+4. **Put HTTPS in front.** Production mode sets secure-only cookies and redirects to HTTPS, so login fails over plain HTTP. Use the NAS reverse proxy (Synology: Control Panel > Login Portal > Advanced > Reverse Proxy) to forward `https://budget.yourname` to `localhost:8000`, with a certificate (Let's Encrypt or your own). The port is bound to loopback by default. For access away from home, prefer Tailscale or a VPN over opening a router port.
+5. Open the site and enroll 2FA right away.
+
+**Backups** (Postgres dump, keep it off the repo; `*.sql`, `*.dump` and `backups/` are git-ignored):
+
+```bash
+docker compose exec -T db pg_dump -U facultybudget facultybudget | gzip > backups/fb-$(date +%F).sql.gz
+```
+
+Also back up `.env` (especially `PII_HMAC_KEY`) somewhere safe, separate from the database dump. Update with `git pull && docker compose up -d --build`.
+
 ### Security notes
 
 - Until 2FA is set up, the password alone can enroll an authenticator. Enroll immediately after `createsuperuser`.

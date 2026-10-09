@@ -9,3 +9,11 @@ samples
 __pycache__
 *.pyc
 .DS_Store
+.env.*
+!.env.example
+!.env.nas.example
+*.sql
+*.dump
+*.sql.gz
+backups
+docker-compose.yml
