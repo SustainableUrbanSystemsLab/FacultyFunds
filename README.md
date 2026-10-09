@@ -1,4 +1,4 @@
-# Faculty Budget
+# Faculty Funds
 
 A private web app for tracking your own faculty funds when you don't have direct access to the balances. It is built around **Workday** (expense reports, worktags) and **OneUSG Connect** (PeopleSoft payroll) exports.
 
@@ -116,10 +116,10 @@ Works on Synology (Container Manager), QNAP (Container Station), Unraid, TrueNAS
 **Backups** (Postgres dump, keep it off the repo; `*.sql`, `*.dump` and `backups/` are git-ignored):
 
 ```bash
-docker compose exec -T db pg_dump -U facultybudget facultybudget | gzip > backups/fb-$(date +%F).sql.gz
+docker compose exec -T db pg_dump -U facultyfunds facultyfunds | gzip > backups/ff-$(date +%F).sql.gz
 ```
 
-Also back up `.env` (especially `PII_HMAC_KEY`) somewhere safe, separate from the database dump. Update with `docker compose pull && docker compose up -d` (image `ghcr.io/sustainableurbansystemslab/facultybudget`, built by GitHub Actions for amd64 and arm64 on every push to `main`). The image contains only code: no secrets, no data. To build on the NAS instead, use `git pull && docker compose up -d --build`.
+Also back up `.env` (especially `PII_HMAC_KEY`) somewhere safe, separate from the database dump. Update with `docker compose pull && docker compose up -d` (image `ghcr.io/sustainableurbansystemslab/facultyfunds`, built by GitHub Actions for amd64 and arm64 on every push to `main`). The image contains only code: no secrets, no data. To build on the NAS instead, use `git pull && docker compose up -d --build`.
 
 ### Security notes
 

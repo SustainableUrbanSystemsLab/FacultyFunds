@@ -234,7 +234,7 @@ wheels = [
 ]
 
 [[package]]
-name = "facultybudget"
+name = "facultyfunds"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

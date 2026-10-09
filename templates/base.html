@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="color-scheme" content="light dark">
-  <title>{% block title %}Faculty Budget{% endblock %} · Faculty Budget</title>
+  <title>{% block title %}Faculty Funds{% endblock %} · Faculty Funds</title>
   <script src="{% static 'js/theme.js' %}"></script>
   <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
@@ -16,7 +16,7 @@
 {% if user.is_authenticated and user.is_verified %}
   <header class="site-header">
     <div class="site-header-inner">
-      <a class="brand" href="{% url 'ledger:dashboard' %}" title="Faculty Budget: go to funds">
+      <a class="brand" href="{% url 'ledger:dashboard' %}" title="Faculty Funds: go to funds">
         <img class="brand-logo" src="{% static 'img/logo.svg' %}" alt="" width="36" height="36">
         <span class="wordmark"><strong>Faculty</strong> <span>Budget</span></span>
       </a>
@@ -52,7 +52,7 @@
 </main>
 {% if user.is_authenticated and user.is_verified %}
   <footer class="site-footer">
-    <div class="site-footer-inner">Faculty Budget · <a href="https://github.com/SustainableUrbanSystemsLab/facultybudget">Source on GitHub</a></div>
+    <div class="site-footer-inner">Faculty Funds · <a href="https://github.com/SustainableUrbanSystemsLab/facultyfunds">Source on GitHub</a></div>
   </footer>
 {% endif %}
 </body>
