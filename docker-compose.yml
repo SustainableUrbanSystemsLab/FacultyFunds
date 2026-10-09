@@ -20,6 +20,8 @@ services:
     # Prebuilt image from GitHub Actions; `docker compose build` still builds locally from the Dockerfile.
     image: ghcr.io/sustainableurbansystemslab/facultyfunds:${IMAGE_TAG:-latest}
     build: .
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"  # NAS Watchtower (label-enable mode) redeploys on a new :latest
     restart: unless-stopped
     depends_on:
       db:
@@ -36,7 +38,7 @@ services:
     # Loopback only: put the NAS reverse proxy (HTTPS) in front. Set BIND=0.0.0.0 only if
     # the proxy runs on another machine.
     ports:
-      - "${BIND:-127.0.0.1}:${HOST_PORT:-8000}:8000"
+      - "${BIND:-127.0.0.1}:${HOST_PORT:-8020}:8000"
 
 volumes:
   pgdata:

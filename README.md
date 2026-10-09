@@ -105,11 +105,11 @@ Works on Synology (Container Manager), QNAP (Container Station), Unraid, TrueNAS
    docker compose exec web python manage.py createsuperuser
    ```
 
-4. **Put HTTPS in front (Synology DSM).** Production mode sets secure-only cookies and redirects to HTTPS, so login fails over plain HTTP. The app listens on `localhost:8000` only.
+4. **Put HTTPS in front (Synology DSM).** Production mode sets secure-only cookies and redirects to HTTPS, so login fails over plain HTTP. The app listens on `localhost:8020` only.
    - Cloudflare DNS: add `funds` pointing at your home's public IP. For the Let's Encrypt step set it to **DNS only** (grey cloud) so validation reaches the NAS; you can switch to Proxied afterwards (SSL mode Full).
    - Router: forward 80 and 443 to the NAS (DSM's nginx owns them).
    - DSM > Control Panel > Security > Certificate > Add > Let's Encrypt for `funds.sustainableurbansystems.com`.
-   - DSM > Control Panel > Login Portal > Advanced > Reverse Proxy > Create: source HTTPS `funds.sustainableurbansystems.com` port 443, destination HTTP `localhost` port 8000. Assign the certificate to this rule under Certificate > Settings. DSM sends `X-Forwarded-Proto`, which the app needs.
+   - DSM > Control Panel > Login Portal > Advanced > Reverse Proxy > Create: source HTTPS `funds.sustainableurbansystems.com` port 443, destination HTTP `localhost` port 8020. Assign the certificate to this rule under Certificate > Settings. DSM sends `X-Forwarded-Proto`, which the app needs.
    - This exposes the login page to the internet. The app has 2FA and lockouts, but consider Cloudflare Access (email allow-list) in front, or a VPN instead.
 5. Open the site and enroll 2FA right away.
 
