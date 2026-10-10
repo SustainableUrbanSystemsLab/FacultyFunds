@@ -1,7 +1,9 @@
+import logging
 import time
 
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
+from django.db import connection
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -24,6 +26,9 @@ CSP = "; ".join(
 ADMIN_CSP = CSP.replace("style-src 'self'", "style-src 'self' 'unsafe-inline'")
 
 
+timing_log = logging.getLogger("facultyfunds.timing")
+
+
 def has_confirmed_totp(user) -> bool:
     from django_otp.plugins.otp_totp.models import TOTPDevice
 
@@ -40,6 +45,45 @@ class HealthCheckMiddleware:
         if request.path == "/healthz":
             return HttpResponse("ok", content_type="text/plain")
         return self.get_response(request)
+
+
+class RequestTimingMiddleware:
+    """Show where each page's time goes, so a slow reload can be traced to the database or the app.
+
+    Logged-in users get a Server-Timing header (see the browser's network panel). Requests slower than
+    SLOW_REQUEST_SECONDS are logged with their database time and query count.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        stats = {"queries": 0, "db": 0.0}
+
+        def timed(execute, sql, params, many, context):
+            started = time.perf_counter()
+            try:
+                return execute(sql, params, many, context)
+            finally:
+                stats["queries"] += 1
+                stats["db"] += time.perf_counter() - started
+
+        started = time.perf_counter()
+        with connection.execute_wrapper(timed):
+            response = self.get_response(request)
+        total = time.perf_counter() - started
+        user = getattr(request, "user", None)
+        if user is not None and user.is_authenticated:
+            response.headers["Server-Timing"] = (
+                f'app;dur={(total - stats["db"]) * 1000:.0f};desc="Django", '
+                f'db;dur={stats["db"] * 1000:.0f};desc="{stats["queries"]} queries"'
+            )
+        if total >= settings.SLOW_REQUEST_SECONDS:
+            timing_log.warning(
+                "slow request %s %s -> %s in %.2fs (database %.2fs, %d queries)",
+                request.method, request.path, response.status_code, total, stats["db"], stats["queries"],
+            )
+        return response
 
 
 class SessionTouchMiddleware:
