@@ -34,7 +34,7 @@ A private web app for faculty who don't have direct access to their own balances
 | 🧾 | **F&A** | Calculated from each fund's rate on MTDC categories, or taken from imported F&A lines. |
 | 🕒 | **Pending entries** | Count a booked trip or an ordered item before it shows up in Workday, then reconcile it with the real transaction. |
 | 🥪 | **Food on grants** | A Meals & hospitality category flags food charged to a federal grant, since awards often don't allow it. |
-| 🔒 | **Private by design** | Single owner, password plus authenticator-app 2FA, and names replaced by a keyed hash the moment a file is read. |
+| 🔒 | **Private by design** | Single owner, passkeys or password plus authenticator-app 2FA, and names replaced by a keyed hash the moment a file is read. |
 
 ### Fund kinds
 
@@ -202,6 +202,7 @@ The Django admin is at `/admin/` (change it with `DJANGO_ADMIN_URL`) and also re
 ## 🔐 Security and privacy
 
 - 🔑 Single owner account, password plus authenticator-app 2FA with backup codes, login lockout, strict security headers, and no page caching.
+- 🪪 Passkeys: add one under **Security** after your first sign-in. A passkey signs you in on its own (it needs your device's fingerprint, face or PIN) or replaces the 6-digit code after a password. Passkeys are tied to the site's domain from `DJANGO_ALLOWED_HOSTS` and need HTTPS (or `http://localhost` in development); set `PASSKEY_RP_ID` / `PASSKEY_ORIGINS` only if the site has several names. Password managers that store passkeys, such as Bitwarden or 1Password, work too.
 - 🕵️ Names and employee IDs are replaced by initials and a keyed hash (HMAC) the moment a file is read. Real names are never stored in the database.
 
 <details>
