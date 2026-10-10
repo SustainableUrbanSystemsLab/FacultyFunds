@@ -19,7 +19,9 @@ services:
   web:
     # Prebuilt image from GitHub Actions; `docker compose build` still builds locally from the Dockerfile.
     image: ghcr.io/sustainableurbansystemslab/facultyfunds:${IMAGE_TAG:-latest}
-    build: .
+    build:
+      context: .
+      network: host  # build containers on some hosts (e.g. IPv6-only DNS) cannot resolve names on the bridge
     labels:
       com.centurylinklabs.watchtower.enable: "true"  # lets Watchtower (label-enable mode) redeploy on a new :latest
     restart: unless-stopped
