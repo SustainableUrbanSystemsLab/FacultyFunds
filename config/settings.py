@@ -84,6 +84,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "accounts.middleware.HealthCheckMiddleware",
+    "accounts.middleware.RequestTimingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -204,6 +205,9 @@ if not DEBUG and not TESTING:
         SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", 60 * 60 * 24 * 365))
 
+# Requests slower than this are logged with their database time (and every page gets a Server-Timing header).
+SLOW_REQUEST_SECONDS = float(os.environ.get("SLOW_REQUEST_SECONDS", "1"))
+
 # Two-factor authentication
 OTP_TOTP_ISSUER = os.environ.get("OTP_ISSUER", "Faculty Funds")
 
@@ -226,5 +230,6 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "WARNING"},
     "loggers": {
         "django": {"handlers": ["console"], "level": os.environ.get("DJANGO_LOG_LEVEL", "INFO"), "propagate": False},
+        "facultyfunds.timing": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

@@ -52,7 +52,7 @@ def _global_alerts() -> list[dict]:
 def dashboard(request):
     show_all = request.GET.get("show") == "all"
     worktags = Worktag.objects.all() if show_all else Worktag.objects.filter(is_active=True)
-    summaries = summarize_funds(worktags.prefetch_related("budget_lines", "funding"))
+    summaries = summarize_funds(worktags)
     groups = []
     for value, label in GROUP_LABELS.items():
         items = [s for s in summaries if s.worktag.type == value]

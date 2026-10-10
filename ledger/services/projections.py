@@ -20,10 +20,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
-from django.db.models import Q
+from django.db.models import Prefetch, prefetch_related_objects
 from django.utils import timezone
 
-from ..models import ZERO, Category, PendingEntry, Person, Transaction, Worktag, WorktagType
+from ..models import ZERO, Appointment, Category, PendingEntry, Person, Transaction, Worktag, WorktagType
 from .rates import RateTable, fiscal_year
 
 BURN_WINDOW_MONTHS = 6
@@ -122,13 +122,32 @@ class FundSummary:
         return (self.end_date - timezone.localdate()).days if self.end_date else None
 
 
+def prefetch_fund_data(worktags: list[Worktag]) -> None:
+    """Load budget lines, funding, appointments and pending entries for all funds in a few queries.
+
+    Safe to call repeatedly: relations that are already loaded are skipped.
+    """
+    prefetch_related_objects(
+        worktags,
+        "budget_lines",
+        "funding",
+        Prefetch("appointments", queryset=Appointment.objects.select_related("person__person_type")),
+        Prefetch("pending_entries", queryset=PendingEntry.objects.filter(status=PendingEntry.Status.PENDING)),
+    )
+
+
 def summarize_fund(
     worktag: Worktag,
     today: dt.date | None = None,
     categories: list[Category] | None = None,
     rates: RateTable | None = None,
+    transactions: list[tuple] | None = None,
+    people: dict[int, Person] | None = None,
 ) -> FundSummary:
+    """`transactions` (category id, person id, date, amount rows) and `people` can be passed in when
+    summarizing many funds at once, which saves two queries per fund."""
     today = today or timezone.localdate()
+    prefetch_fund_data([worktag])
     period_start, period_end = worktag.period(today)  # fiscal year for state funds, else (None, None)
     fund_start = period_start or worktag.start_date
     fund_end = period_end or worktag.end_date
@@ -157,10 +176,13 @@ def summarize_fund(
     covered = {Category.SALARIES: set(), Category.FRINGE: set(), Category.TUITION: set()}
     uncategorized = ignored_fa = ZERO
     other = line_for(Category.OTHER)
-    spending = Transaction.objects.filter(worktag=worktag)
-    if period_start:
-        spending = spending.filter(date__range=(period_start, period_end))
-    rows = spending.values_list("category_id", "person_id", "date", "amount")
+    if transactions is None:
+        spending = Transaction.objects.filter(worktag=worktag)
+        if period_start:
+            spending = spending.filter(date__range=(period_start, period_end))
+        rows = spending.values_list("category_id", "person_id", "date", "amount")
+    else:
+        rows = [row for row in transactions if period_start is None or period_start <= row[2] <= period_end]
     for category_id, person_id, date, amount in rows:
         month = month_start(date)
         code = code_of.get(category_id)
@@ -179,7 +201,7 @@ def summarize_fund(
         if code == Category.SALARIES:
             salary[(person_id, month)] += amount
 
-    appointments = list(worktag.appointments.select_related("person__person_type"))
+    appointments = list(worktag.appointments.all())
     people_without_type = set()
 
     def is_covered(code: str, person_id, month) -> bool:
@@ -203,7 +225,8 @@ def summarize_fund(
     fringe_line = line_for(Category.FRINGE)
     unestimated_payroll = False
     if salary:
-        people = Person.objects.select_related("person_type").in_bulk({p for p, _ in salary if p})
+        if people is None:
+            people = Person.objects.select_related("person_type").in_bulk({p for p, _ in salary if p})
         for (person_id, month), amount in salary.items():
             if is_covered(Category.FRINGE, person_id, month):
                 continue
@@ -285,10 +308,12 @@ def summarize_fund(
         plan_rows.append(plan)
 
     # --- Pending entries
-    pending_qs = worktag.pending_entries.filter(status=PendingEntry.Status.PENDING)
-    if period_start:
-        pending_qs = pending_qs.filter(Q(expected_date__isnull=True) | Q(expected_date__range=(period_start, period_end)))
-    pending_entries = list(pending_qs)
+    pending_entries = [
+        entry
+        for entry in worktag.pending_entries.all()
+        if entry.status == PendingEntry.Status.PENDING
+        and (period_start is None or entry.expected_date is None or period_start <= entry.expected_date <= period_end)
+    ]
     for entry in pending_entries:
         lines[entry.category_id].pending += entry.amount
 
@@ -472,6 +497,20 @@ def _fund_alerts(
 
 
 def summarize_funds(worktags, today: dt.date | None = None) -> list[FundSummary]:
+    """Summaries for many funds with a handful of queries in total instead of several per fund."""
+    worktags = list(worktags)
     categories = list(Category.objects.all())
     rates = RateTable()
-    return [summarize_fund(worktag, today=today, categories=categories, rates=rates) for worktag in worktags]
+    prefetch_fund_data(worktags)
+    rows = defaultdict(list)
+    for fund_id, category_id, person_id, date, amount in Transaction.objects.filter(
+        worktag__in=worktags
+    ).values_list("worktag_id", "category_id", "person_id", "date", "amount"):
+        rows[fund_id].append((category_id, person_id, date, amount))
+    people = {person.pk: person for person in Person.objects.select_related("person_type")}
+    return [
+        summarize_fund(
+            worktag, today=today, categories=categories, rates=rates, transactions=rows[worktag.pk], people=people
+        )
+        for worktag in worktags
+    ]
