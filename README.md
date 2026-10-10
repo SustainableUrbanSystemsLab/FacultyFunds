@@ -2,13 +2,14 @@
 
 A private web app for tracking your own faculty funds when you don't have direct access to the balances. It is built around **Workday** (expense reports, worktags) and **OneUSG Connect** (PeopleSoft payroll) exports.
 
-- **Funds:** track grants, gifts, cost centers, projects, and programs by worktag ID. Each has a budget per category, start and end dates, and an F&A rate.
+- **Funds:** three kinds, tracked by worktag ID. **Federal grants** (NSF, DOE, and other federal agencies) have an award amount, an end date, an F&A rate, and an optional budget per category. **Foundation and gift funds** just have money added to them (the award, then top-ups) and never expire. **State funds** get an allocation each fiscal year and lapse on June 30, so the app shows only the current year and warns when money is on pace to go unspent.
 - **Imports:** upload Workday expense report exports and OneUSG payroll worksheets (`.xlsx`, `.xls`, `.csv`, or PeopleSoft "Excel" downloads that are really HTML). The app finds the header row and suggests a column mapping. You confirm a preview before anything is saved. Mappings are remembered, duplicate rows are skipped when you re-import, and any import can be undone.
-- **Budget vs. actuals:** see spent, pending, planned payroll, and what's left, now and projected to the end date.
-- **Payroll projections:** each appointment is monthly salary × effort, plus fringe from the person type's rate, graduate tuition remission per month, and summer salary.
+- **Budget vs. actuals:** see spent, pending, planned payroll, and what's left, now and projected to the end date (June 30 for state funds).
+- **Payroll projections:** each appointment is monthly salary × effort (or hourly rate × hours per week for student workers), plus fringe from the person type's rate, graduate tuition remission per month, and summer salary.
 - **F&A:** calculated from each fund's rate on MTDC categories, or taken from imported F&A lines.
 - **Burn rate and runway:** alerts for overspending, funds running out before the end date, funds ending with money unspent, and stale pending items.
-- **Pending entries:** log expected spending, then reconcile it with the real transaction once it's imported.
+- **Pending entries:** log expected spending (a booked trip, an ordered item), then reconcile it with the real transaction once it's imported.
+- **Food on grants:** the Meals & hospitality category flags food charged to a federal grant, since awards often don't allow it.
 - **Security:** single owner account, password plus authenticator-app 2FA with backup codes, login lockout, strict security headers, and no page caching.
 - **Privacy:** names and employee IDs are replaced by initials and a keyed hash (HMAC) the moment a file is read. Real names are never stored in the database.
 
@@ -29,11 +30,11 @@ uv run python manage.py runserver
 
 Open http://127.0.0.1:8000, sign in, and scan the QR code with an authenticator app. **Save the backup codes** that appear next.
 
-To try it with fake data, run `uv run python manage.py seed_demo`. It adds two example funds and an appointment, and writes sample Workday and OneUSG files to `samples/demo/` for you to upload on the Import page.
+To try it with fake data, run `uv run python manage.py seed_demo`. It adds one fund of each kind and an appointment, and writes sample Workday and OneUSG files to `samples/demo/` for you to upload on the Import page.
 
 ## Typical workflow
 
-1. **Add your funds:** go to Funds → Add fund. Enter the worktag ID exactly as Workday shows it (e.g. `GR00012345`). Under "Other IDs", add the award ID (`AWD…`) or OneUSG project code so payroll rows match too. Then enter the budget per category and the F&A rate.
+1. **Add your funds:** go to Funds → Add fund. Choose the kind, then enter the worktag ID exactly as Workday shows it (e.g. `GR00012345`), a name, and the amount. For a grant, also set the end date and F&A rate, and optionally split the award by category. Under More options, add the award ID (`AWD…`) or OneUSG project code so payroll rows match too. Later, use **Add funding** on the fund page for a top-up or, for state money, each new fiscal year's allocation.
 2. **Set rates:** under Settings → Fringe and tuition rates by fiscal year, enter each year's fringe rate and monthly tuition remission for each person type. Fiscal years run July–June, so FY2027 is July 2026 to June 2027. A year left blank reuses the closest earlier year. The defaults are Georgia Tech's FY2025 values.
 3. **Import reports:** go to Import, choose the file type, and upload.
    - The first time you import a layout, match the columns: date, amount, worktag columns, person, status, and so on.
@@ -42,8 +43,8 @@ To try it with fake data, run `uv run python manage.py seed_demo`. It adds two e
    - For a worksheet with one column per month, select all of the month columns as "Amount".
    - The preview shows what will be imported, what's a duplicate, and which worktag IDs you don't track yet.
    - Re-import cumulative exports (e.g. all expense reports year-to-date) as often as you like: rows already in the ledger are skipped. One caveat: if a report's *amount* changes between exports (a line edited before approval), the new amount is imported as a new row, so delete the old one under Transactions.
-4. **Review:** rows with no matching fund or category rule land in Review. Add the fund or a keyword rule and click "Re-run matching", or assign rows in bulk.
-5. **Plan:** add appointments for people paid from each fund (start and end, monthly salary, effort %), and pending entries for known upcoming costs.
+4. **Needs review:** rows with no matching fund or category rule land under Transactions → Needs review. Add the fund or a keyword rule and click "Re-run matching", or assign rows in bulk.
+5. **Plan:** add appointments for people paid from each fund (start and end, monthly salary and effort %, or hourly rate and hours per week), and pending entries (Transactions → Pending) for known upcoming costs.
 6. **Watch the dashboard:** it shows alerts, projected balances, burn rate, and runway for each fund. Each fund page has a spending chart and a CSV export.
 
 ### How projections work
@@ -55,6 +56,8 @@ To try it with fake data, run `uv run python manage.py seed_demo`. It adds two e
 | Fringe on actuals | Payroll salary with no fringe line for that person and month gets fringe estimated at that month's fiscal-year rate. |
 | Planned payroll | Each appointment month *without* a salary actual for that person on that fund: salary × effort (prorated for partial months), plus fringe. |
 | Tuition | That fiscal year's monthly tuition remission × effort, for months without a tuition actual. |
+| Funding | A fund's budget is the sum of its funding entries. State funds count only the current fiscal year's allocation and spending, since unspent money lapses on June 30. |
+| Hourly | Hourly rate × hours per week × 52 ÷ 12 per month, plus fringe at the person type's rate. |
 | Pending | Pending entries count until they're reconciled or cancelled. |
 | F&A | Fund rate × spending in categories marked "Subject to F&A". It applies to actual, pending, and planned amounts. |
 | Burn rate | Average monthly actual spending over the last 6 complete months (fewer if the fund or its spending started more recently). Runway = (budget − spent − pending) ÷ burn rate. |

@@ -27,7 +27,7 @@
 
 {% for label, summaries in groups %}
 <section class="card flush">
-  <h2 class="card-title">{{ label }}{{ summaries|length|pluralize }}</h2>
+  <h2 class="card-title">{{ label }}</h2>
   <div class="table-wrap">
     <table class="table">
       <thead>
@@ -41,8 +41,8 @@
       {% for s in summaries %}
         {% with t=s.total w=s.worktag %}
         <tr{% if not w.is_active %} class="row-muted"{% endif %}>
-          <td><a href="{% url 'ledger:fund_detail' w.pk %}"><strong>{{ w.code }}</strong></a><div class="sub">{{ w.name }}</div></td>
-          <td class="nowrap">{% if w.end_date %}{{ w.end_date|date:"M j, Y" }}{% if s.days_left is not None and s.days_left >= 0 %}<div class="sub">{{ s.days_left }} days</div>{% endif %}{% else %}—{% endif %}</td>
+          <td><a href="{% url 'ledger:fund_detail' w.pk %}"><strong>{{ w.code }}</strong></a><div class="sub">{{ w.name }}{% if s.period_label %} · {{ s.period_label }}{% endif %}</div></td>
+          <td class="nowrap">{% if s.end_date %}{{ s.end_date|date:"M j, Y" }}{% if s.days_left is not None and s.days_left >= 0 %}<div class="sub">{{ s.days_left }} days{% if s.period_label %} · lapses{% endif %}</div>{% endif %}{% else %}—{% endif %}</td>
           <td class="num">{{ t.budget|money }}</td>
           <td class="num">{{ t.actual|money }}</td>
           <td class="num">{{ t.committed|money }}</td>
@@ -65,7 +65,7 @@
 <section class="card empty">
   {% include "partials/icon.html" with name="banknotes" class="empty-icon" %}
   <h2>Start by adding a fund</h2>
-  <p>Add each grant, gift, cost center, project, or program you track, with its Workday worktag ID and budget. Then import Workday expense reports and OneUSG payroll worksheets.</p>
+  <p>Add each federal grant, foundation or gift fund, and state fund you track, with its Workday worktag ID and amount. Then import Workday expense reports and OneUSG payroll worksheets.</p>
   <p><a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">Add fund</a></p>
 </section>
 {% endif %}

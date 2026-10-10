@@ -4,17 +4,17 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <p class="eyebrow">{{ worktag.get_type_display }}{% if not worktag.is_active %} · inactive{% endif %}</p>
+    <p class="eyebrow">{{ worktag.get_type_display }}{% if summary.period_label %} · {{ summary.period_label }}{% endif %}{% if not worktag.is_active %} · inactive{% endif %}</p>
     <h1>{{ worktag.code }} <span class="h-sub">{{ worktag.name }}</span></h1>
     <p class="muted">
       {% if worktag.sponsor %}{{ worktag.sponsor }} · {% endif %}
-      {% if worktag.start_date %}{{ worktag.start_date|date:"M j, Y" }}{% endif %}{% if worktag.end_date %} – {{ worktag.end_date|date:"M j, Y" }}{% endif %}
+      {% if worktag.lapses_yearly %}Unspent money lapses {{ summary.end_date|date:"M j, Y" }}{% else %}{% if worktag.start_date %}{{ worktag.start_date|date:"M j, Y" }}{% endif %}{% if worktag.end_date %} – {{ worktag.end_date|date:"M j, Y" }}{% endif %}{% endif %}
       {% if worktag.fa_rate %} · F&amp;A {{ worktag.fa_rate|trim_decimal }}% ({{ worktag.get_fa_actuals_display|lower }}){% endif %}
     </p>
   </div>
   <div class="actions">
     <a class="btn" href="{% url 'ledger:fund_export' worktag.pk %}">{% include "partials/icon.html" with name="arrow-down-tray" %}Export CSV</a>
-    <a class="btn btn-primary" href="{% url 'ledger:fund_edit' worktag.pk %}">{% include "partials/icon.html" with name="pencil-square" %}Edit fund &amp; budget</a>
+    <a class="btn btn-primary" href="{% url 'ledger:fund_edit' worktag.pk %}">{% include "partials/icon.html" with name="pencil-square" %}Edit fund</a>
   </div>
 </div>
 
@@ -24,12 +24,12 @@
 
 {% with t=summary.total %}
 <div class="kpis">
-  <div class="kpi"><span>Budget</span><strong>{{ t.budget|money }}</strong></div>
+  <div class="kpi"><span>{% if worktag.lapses_yearly %}Allocation {{ summary.period_label }}{% else %}Funding{% endif %}</span><strong>{{ t.budget|money }}</strong></div>
   <div class="kpi"><span>Spent</span><strong>{{ t.actual|money }}</strong>{% if t.estimated %}<small>incl. {{ t.estimated|money }} calculated</small>{% endif %}</div>
   <div class="kpi"><span>Pending</span><strong>{{ t.pending|money }}</strong></div>
   <div class="kpi"><span>Planned payroll</span><strong>{{ t.planned|money }}</strong></div>
   <div class="kpi"><span>Left now</span><strong class="{{ t.remaining|neg_class }}">{{ t.remaining|money }}</strong><small>after spent + pending</small></div>
-  <div class="kpi"><span>Projected at end</span><strong class="{{ t.projected_remaining|neg_class }}">{{ t.projected_remaining|money }}</strong><small>after planned payroll</small></div>
+  <div class="kpi"><span>Projected at end</span><strong class="{{ t.projected_remaining|neg_class }}">{{ t.projected_remaining|money }}</strong><small>after planned payroll{% if worktag.lapses_yearly %}; unspent lapses{% endif %}</small></div>
   <div class="kpi"><span>Burn rate</span><strong>{{ summary.burn_rate|money }}<small> /mo</small></strong><small>{% if summary.burn_months %}avg of {{ summary.burn_months }} mo{% if summary.runway_months is not None %} · {{ summary.runway_months|runway }} runway{% endif %}{% if summary.months_left is not None %} · {{ summary.months_left }} mo left{% endif %}{% else %}no complete month yet{% endif %}</small></div>
 </div>
 {% endwith %}
@@ -37,35 +37,66 @@
 {% if chart %}<section class="card">{% include "ledger/partials/burn_chart.html" %}</section>{% endif %}
 
 <section class="card flush">
-  <h2 class="card-title">Budget by category</h2>
+  <div class="card-title-row">
+    <h2 class="card-title">Funding</h2>
+    <a class="btn btn-small" href="{% url 'ledger:funding_create' worktag.pk %}">Add funding</a>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Date</th><th>What</th>{% if worktag.lapses_yearly %}<th>Fiscal year</th>{% endif %}<th class="num">Amount</th><th></th></tr></thead>
+      <tbody>
+      {% for entry in funding %}
+        <tr{% if worktag.lapses_yearly and entry.fiscal_year|stringformat:"s" != summary.period_label|cut:"FY" %} class="row-muted"{% endif %}>
+          <td class="nowrap">{{ entry.date|date:"M j, Y" }}</td>
+          <td>{{ entry.description|default:"—" }}</td>
+          {% if worktag.lapses_yearly %}<td>FY{{ entry.fiscal_year }}</td>{% endif %}
+          <td class="num">{{ entry.amount|money_cents }}</td>
+          <td class="row-actions"><a href="{% url 'ledger:funding_edit' entry.pk %}">Edit</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="{% if worktag.lapses_yearly %}5{% else %}4{% endif %}" class="muted">Nothing yet. <a href="{% url 'ledger:funding_create' worktag.pk %}">Add the {% if worktag.lapses_yearly %}allocation for this fiscal year{% else %}award or gift amount{% endif %}</a>. Add more later for top-ups{% if worktag.lapses_yearly %} and each new fiscal year{% endif %}.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card flush">
+  <h2 class="card-title">{% if summary.has_category_budgets %}Budget by category{% else %}Spending by category{% endif %}</h2>
   <div class="table-wrap">
     <table class="table">
       <thead>
-        <tr><th>Category</th><th class="num">Budget</th><th class="num">Spent</th><th class="num">Pending</th><th class="num">Planned</th><th class="num">Left now</th><th class="num">Projected left</th><th class="bar-col">Used</th></tr>
+        <tr>
+          <th>Category</th>{% if summary.has_category_budgets %}<th class="num">Budget</th>{% endif %}<th class="num">Spent</th><th class="num">Pending</th><th class="num">Planned</th>
+          {% if summary.has_category_budgets %}<th class="num">Left now</th><th class="num">Projected left</th><th class="bar-col">Used</th>{% endif %}
+        </tr>
       </thead>
       <tbody>
       {% for line in summary.lines %}
         <tr>
           <td>{{ line.category.name }}{% if line.estimated %} <span class="badge" title="Includes calculated amounts (fringe estimated from rate or F&amp;A from the fund rate)">calc.</span>{% endif %}</td>
-          <td class="num">{{ line.budget|money }}</td>
+          {% if summary.has_category_budgets %}<td class="num">{{ line.budget|money }}</td>{% endif %}
           <td class="num">{{ line.actual|money }}</td>
           <td class="num">{{ line.pending|money }}</td>
           <td class="num">{{ line.planned|money }}</td>
+          {% if summary.has_category_budgets %}
           <td class="num {{ line.remaining|neg_class }}">{{ line.remaining|money }}</td>
           <td class="num {{ line.projected_remaining|neg_class }}">{{ line.projected_remaining|money }}</td>
           <td class="bar-col">{% include "ledger/partials/bar.html" %}</td>
+          {% endif %}
         </tr>
       {% empty %}
-        <tr><td colspan="8" class="muted">No budget or spending yet. <a href="{% url 'ledger:fund_edit' worktag.pk %}">Enter the budget</a>.</td></tr>
+        <tr><td colspan="{% if summary.has_category_budgets %}8{% else %}4{% endif %}" class="muted">No spending yet. Import a Workday report to see it here.</td></tr>
       {% endfor %}
       </tbody>
       {% if summary.lines %}
       {% with line=summary.total %}
       <tfoot>
         <tr>
-          <th>Total</th><th class="num">{{ line.budget|money }}</th><th class="num">{{ line.actual|money }}</th><th class="num">{{ line.pending|money }}</th>
-          <th class="num">{{ line.planned|money }}</th><th class="num {{ line.remaining|neg_class }}">{{ line.remaining|money }}</th>
-          <th class="num {{ line.projected_remaining|neg_class }}">{{ line.projected_remaining|money }}</th><th class="bar-col">{% include "ledger/partials/bar.html" %}</th>
+          <th>Total</th>{% if summary.has_category_budgets %}<th class="num">{{ line.budget|money }}</th>{% endif %}<th class="num">{{ line.actual|money }}</th><th class="num">{{ line.pending|money }}</th>
+          <th class="num">{{ line.planned|money }}</th>
+          {% if summary.has_category_budgets %}<th class="num {{ line.remaining|neg_class }}">{{ line.remaining|money }}</th>
+          <th class="num {{ line.projected_remaining|neg_class }}">{{ line.projected_remaining|money }}</th><th class="bar-col">{% include "ledger/partials/bar.html" %}</th>{% endif %}
         </tr>
       </tfoot>
       {% endwith %}
@@ -81,14 +112,14 @@
   </div>
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Person</th><th>Period</th><th class="num">Effort</th><th class="num">Monthly</th><th class="num">Months not yet paid</th><th class="num">Salary</th><th class="num">Fringe</th><th class="num">Tuition</th></tr></thead>
+      <thead><tr><th>Person</th><th>Period</th><th class="num">Effort / hours</th><th class="num">Monthly</th><th class="num">Months not yet paid</th><th class="num">Salary</th><th class="num">Fringe</th><th class="num">Tuition</th></tr></thead>
       <tbody>
       {% for plan in summary.plan_rows %}
         {% with a=plan.appointment %}
         <tr>
-          <td><a href="{% url 'ledger:person_detail' a.person_id %}">{{ a.person.alias }}</a>{% if a.kind == 'summer' %} <span class="badge">summer</span>{% endif %}</td>
+          <td><a href="{% url 'ledger:person_detail' a.person_id %}">{{ a.person.alias }}</a>{% if a.kind == 'summer' %} <span class="badge">summer</span>{% elif a.is_hourly %} <span class="badge">hourly</span>{% endif %}</td>
           <td class="nowrap"><a href="{% url 'ledger:appointment_edit' a.pk %}?next={{ request.get_full_path|urlencode }}">{{ a.start_date|date:"M Y" }} – {{ a.end_date|date:"M Y" }}</a></td>
-          <td class="num">{{ a.effort_pct|trim_decimal }}%</td>
+          <td class="num">{% if a.is_hourly %}{{ a.hours_per_week|trim_decimal }} h/wk{% else %}{{ a.effort_pct|trim_decimal }}%{% endif %}</td>
           <td class="num">{{ a.monthly_charge|money }}</td>
           <td class="num">{{ plan.months }}</td>
           <td class="num">{{ plan.salary|money }}</td>
@@ -122,7 +153,7 @@
           <td class="row-actions"><a href="{% url 'ledger:pending_reconcile' entry.pk %}">Reconcile</a> <a href="{% url 'ledger:pending_edit' entry.pk %}?next={{ request.get_full_path|urlencode }}">Edit</a></td>
         </tr>
       {% empty %}
-        <tr><td colspan="5" class="muted">Nothing pending.</td></tr>
+        <tr><td colspan="5" class="muted">Nothing pending. Add costs you know are coming, like a booked trip or an ordered item, so they count now.</td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head"><h1>{% if appointment %}Edit appointment{% else %}Add appointment{% endif %}</h1></div>
 <section class="card">
-  <p class="muted">Planned payroll on one fund. Projections charge <em>monthly salary × effort</em> plus fringe for every month without a salary actual, using the rates for the fiscal year each month falls in. Tuition remission is added per month if the person type has a rate (for example, GSTRP for graduate assistants). For summer salary, add a separate “Summer salary” appointment for those months.</p>
+  <p class="muted">Planned payroll on one fund. Projections charge the pay plus fringe for every month without a payroll actual, using the rates for the fiscal year each month falls in. Choose <strong>Monthly salary</strong> (monthly amount × effort), <strong>Summer salary</strong> for those months, or <strong>Hourly</strong> for student workers (hourly rate × hours per week). Tuition remission is added per month if the person type has a rate (for example, GSTRP for graduate assistants).</p>
   <form method="post">
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ next }}">

@@ -522,3 +522,19 @@ code.secret { display: block; margin-top: 8px; padding: 8px 10px; border-radius:
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }
+
+/* Hidden by script (data-when) must win over component display rules */
+[hidden] { display: none !important; }
+
+/* Sub-navigation inside a section (Transactions: All / Pending / Needs review) */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 16px; border-bottom: 1px solid var(--border); }
+.tabs a {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; margin-bottom: -1px;
+  border-bottom: 2px solid transparent; color: var(--text-2); font-weight: 500; text-decoration: none;
+}
+.tabs a:hover { color: var(--text-strong); text-decoration: none; }
+.tabs a[aria-current="page"] { color: var(--nav-active-text); border-bottom-color: var(--brand); }
+
+/* Collapsible form sections */
+details.card > summary { cursor: pointer; font-weight: 600; color: var(--text-strong); }
+details.card[open] > summary { margin-bottom: 12px; }

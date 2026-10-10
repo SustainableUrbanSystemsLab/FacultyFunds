@@ -1,0 +1,5 @@
+<nav class="tabs" aria-label="Transactions sections">
+  <a href="{% url 'ledger:transactions' %}"{% if tab == "all" %} aria-current="page"{% endif %}>All transactions</a>
+  <a href="{% url 'ledger:pending' %}"{% if tab == "pending" %} aria-current="page"{% endif %}>Pending{% if nav_pending_count %} <span class="count">{{ nav_pending_count }}</span>{% endif %}</a>
+  <a href="{% url 'ledger:review' %}"{% if tab == "review" %} aria-current="page"{% endif %}>Needs review{% if nav_review_count %} <span class="count">{{ nav_review_count }}</span>{% endif %}</a>
+</nav>

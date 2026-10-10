@@ -91,6 +91,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django_otp.middleware.OTPMiddleware",
+    "accounts.middleware.SessionTouchMiddleware",
     "accounts.middleware.RequireTwoFactorMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -183,7 +184,8 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 # --- Sessions & security -----------------------------------------------------
 SESSION_COOKIE_AGE = int(os.environ.get("SESSION_IDLE_SECONDS", 2 * 60 * 60))
-SESSION_SAVE_EVERY_REQUEST = True  # sliding idle timeout
+# Sliding idle timeout, refreshed at most every few minutes (accounts.middleware.SessionTouchMiddleware)
+# instead of a database write on every request.
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"

@@ -4,19 +4,14 @@ USG fiscal years run July 1 to June 30 and are named by the year they end:
 FY2027 is July 2026 to June 2027.
 """
 
-import datetime as dt
 from bisect import bisect_right
 from collections import defaultdict
 from decimal import Decimal
 
+from ..fiscal import fiscal_year  # noqa: F401  (re-exported for callers of this module)
 from ..models import FiscalYearRate
 
-FISCAL_YEAR_START_MONTH = 7
 ZERO = Decimal("0")
-
-
-def fiscal_year(day: dt.date) -> int:
-    return day.year + 1 if day.month >= FISCAL_YEAR_START_MONTH else day.year
 
 
 class RateTable:

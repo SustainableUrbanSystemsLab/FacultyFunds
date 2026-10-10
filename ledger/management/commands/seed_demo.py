@@ -6,7 +6,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
 from ledger import samples
-from ledger.models import Appointment, BudgetLine, Category, Person, PersonType, Worktag, WorktagType
+from ledger.models import Appointment, BudgetLine, Category, Funding, Person, PersonType, Worktag, WorktagType
 
 
 class Command(BaseCommand):
@@ -23,7 +23,7 @@ class Command(BaseCommand):
         grant, created = Worktag.objects.get_or_create(
             code="GR00012345",
             defaults={
-                "type": WorktagType.GRANT, "name": "Solar Facade Study (demo)", "sponsor": "Example Foundation",
+                "type": WorktagType.GRANT, "name": "Solar Facade Study (demo)", "sponsor": "Example Agency",
                 "start_date": dt.date(2026, 1, 1), "end_date": dt.date(2027, 12, 31), "fa_rate": Decimal("57.4"),
                 "match_codes": "AWD000123",
             },
@@ -32,13 +32,18 @@ class Command(BaseCommand):
             budget = {"salaries": 90000, "fringe": 12000, "tuition": 40000, "travel": 8000, "supplies": 6000, "fa": 60000}
             for code, amount in budget.items():
                 BudgetLine.objects.create(worktag=grant, category=Category.objects.get(code=code), amount=amount)
-        startup, created = Worktag.objects.get_or_create(
-            code="CC0001234",
-            defaults={"type": WorktagType.COST_CENTER, "name": "Startup package (demo)", "end_date": dt.date(2028, 6, 30)},
+            Funding.objects.create(worktag=grant, date=dt.date(2026, 1, 1), amount=sum(budget.values()), description="Award")
+        fellowship, created = Worktag.objects.get_or_create(
+            code="DE00099999",
+            defaults={"type": WorktagType.GIFT, "name": "Faculty Fellow award (demo)"},
         )
         if created:
-            BudgetLine.objects.create(worktag=startup, category=Category.objects.get(code="other"), amount=150000)
-            BudgetLine.objects.create(worktag=startup, category=Category.objects.get(code="salaries"), amount=20000)
+            Funding.objects.create(worktag=fellowship, date=dt.date(2026, 9, 1), amount=2000, description="Award transferred")
+        state, created = Worktag.objects.get_or_create(
+            code="CC0001234", defaults={"type": WorktagType.STATE, "name": "Department funds (demo)"},
+        )
+        if created:
+            Funding.objects.create(worktag=state, date=dt.date.today(), amount=15000, description="Allocation for this fiscal year")
 
         gra = PersonType.objects.filter(name__icontains="graduate").first()
         student = Person.objects.filter(alias="JD").first() or Person.objects.create(alias="Demo GRA", person_type=gra)

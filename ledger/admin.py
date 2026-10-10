@@ -6,6 +6,7 @@ from .models import (
     Category,
     CategoryRule,
     FiscalYearRate,
+    Funding,
     ImportBatch,
     ImportProfile,
     PendingEntry,
@@ -22,12 +23,17 @@ class BudgetLineInline(admin.TabularInline):
     extra = 0
 
 
+class FundingInline(admin.TabularInline):
+    model = Funding
+    extra = 0
+
+
 @admin.register(Worktag)
 class WorktagAdmin(admin.ModelAdmin):
     list_display = ["code", "name", "type", "start_date", "end_date", "fa_rate", "is_active"]
     list_filter = ["type", "is_active"]
     search_fields = ["code", "name", "match_codes"]
-    inlines = [BudgetLineInline]
+    inlines = [FundingInline, BudgetLineInline]
 
 
 @admin.register(Transaction)

@@ -18,21 +18,18 @@
     <div class="site-header-inner">
       <a class="brand" href="{% url 'ledger:dashboard' %}" title="Faculty Funds: go to funds">
         <img class="brand-logo" src="{% static 'img/logo.svg' %}" alt="" width="36" height="36">
-        <span class="wordmark"><strong>Faculty</strong> <span>Budget</span></span>
+        <span class="wordmark"><strong>Faculty</strong> <span>Funds</span></span>
       </a>
       {% with n=request.resolver_match.url_name|default:"" %}
       <nav class="mainnav" aria-label="Main">
         <a href="{% url 'ledger:dashboard' %}"{% if n == 'dashboard' or 'fund' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="banknotes" %}<span>Funds</span></a>
-        <a href="{% url 'ledger:review' %}"{% if n == 'review' %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="inbox-arrow-down" %}<span>Review</span>{% if nav_review_count %}<span class="count" title="{{ nav_review_count }} to review">{{ nav_review_count }}</span>{% endif %}</a>
-        <a href="{% url 'ledger:transactions' %}"{% if 'transaction' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="queue-list" %}<span>Transactions</span></a>
-        <a href="{% url 'ledger:pending' %}"{% if 'pending' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="clock" %}<span>Pending</span></a>
+        <a href="{% url 'ledger:transactions' %}"{% if 'transaction' in n or n == 'review' or 'pending' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="queue-list" %}<span>Transactions</span>{% if nav_review_count %}<span class="count" title="{{ nav_review_count }} to review">{{ nav_review_count }}</span>{% endif %}</a>
         <a href="{% url 'ledger:people' %}"{% if 'person' in n or 'people' in n or 'appointment' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="users" %}<span>People</span></a>
         <a href="{% url 'ledger:imports' %}"{% if 'import' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="arrow-up-tray" %}<span>Import</span>{% if nav_staged_count %}<span class="count" title="{{ nav_staged_count }} waiting">{{ nav_staged_count }}</span>{% endif %}</a>
-        <a href="{% url 'ledger:settings' %}"{% if 'setting' in n or 'profile' in n %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="cog-6-tooth" %}<span>Settings</span></a>
+        <a href="{% url 'ledger:settings' %}"{% if 'setting' in n or 'profile' in n or n == 'security' %} aria-current="page"{% endif %}>{% include "partials/icon.html" with name="cog-6-tooth" %}<span>Settings</span></a>
       </nav>
       {% endwith %}
       <div class="usermenu">
-        <a class="icon-btn" href="{% url 'accounts:security' %}" title="Security: 2FA, backup codes, password" aria-label="Security settings">{% include "partials/icon.html" with name="shield-check" %}</a>
         {% include "partials/theme_toggle.html" %}
         <form method="post" action="{% url 'accounts:logout' %}">
           {% csrf_token %}

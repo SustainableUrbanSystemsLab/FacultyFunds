@@ -9,15 +9,20 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
-from ..forms import BudgetForm, WorktagForm
-from ..models import ImportBatch, PendingEntry, Transaction, Worktag, WorktagType
+from ..forms import BudgetForm, FundingForm, WorktagForm
+from ..models import Funding, ImportBatch, PendingEntry, Transaction, Worktag, WorktagType
 from ..services.charts import burn_chart
 from ..services.importer import rematch_transactions
 from ..services.projections import Line, summarize_fund, summarize_funds
 from ..templatetags.ledger_tags import money
-from .common import confirm_page, csv_safe
+from .common import confirm_page, csv_safe, safe_next
 
 LEVEL_ORDER = {"danger": 0, "warn": 1, "info": 2}
+GROUP_LABELS = {
+    WorktagType.GRANT: "Federal grants",
+    WorktagType.GIFT: "Foundation and gift funds",
+    WorktagType.STATE: "State funds",
+}
 
 
 def _global_alerts() -> list[dict]:
@@ -47,9 +52,9 @@ def _global_alerts() -> list[dict]:
 def dashboard(request):
     show_all = request.GET.get("show") == "all"
     worktags = Worktag.objects.all() if show_all else Worktag.objects.filter(is_active=True)
-    summaries = summarize_funds(worktags.prefetch_related("budget_lines"))
+    summaries = summarize_funds(worktags.prefetch_related("budget_lines", "funding"))
     groups = []
-    for value, label in WorktagType.choices:
+    for value, label in GROUP_LABELS.items():
         items = [s for s in summaries if s.worktag.type == value]
         if items:
             groups.append((label, items))
@@ -82,6 +87,7 @@ def fund_detail(request, pk):
         "transactions": worktag.transactions.select_related("category", "person")[:25],
         "transaction_count": worktag.transactions.count(),
         "pending": worktag.pending_entries.filter(status=PendingEntry.Status.PENDING).select_related("category", "person"),
+        "funding": worktag.funding.all(),
     }
     return render(request, "ledger/fund_detail.html", context)
 
@@ -96,12 +102,43 @@ def fund_form(request, pk=None):
     if request.method == "POST" and form.is_valid() and budget_form.is_valid():
         with db_transaction.atomic():
             worktag = form.save()
-            budget_form.save(worktag)
+            if worktag.type == WorktagType.GRANT:
+                budget_form.save(worktag)
+            else:  # category budgets only exist for grants
+                worktag.budget_lines.all().delete()
         matched, _ = rematch_transactions()
         note = f" {matched} unassigned transactions matched to it." if matched else ""
         messages.success(request, f"Saved {worktag.code}.{note}")
         return redirect(worktag)
     return render(request, "ledger/fund_form.html", {"form": form, "budget_form": budget_form, "worktag": worktag})
+
+
+def funding_form(request, fund=None, pk=None):
+    entry = get_object_or_404(Funding.objects.select_related("worktag"), pk=pk) if pk else None
+    worktag = entry.worktag if entry else get_object_or_404(Worktag, pk=fund)
+    form = FundingForm(request.POST or None, instance=entry)
+    next_url = safe_next(request, worktag.get_absolute_url())
+    if request.method == "POST" and form.is_valid():
+        saved = form.save(commit=False)
+        saved.worktag = worktag
+        saved.save()
+        messages.success(request, "Funding saved.")
+        return redirect(next_url)
+    return render(request, "ledger/funding_form.html", {"form": form, "entry": entry, "worktag": worktag, "next": next_url})
+
+
+def funding_delete(request, pk):
+    entry = get_object_or_404(Funding.objects.select_related("worktag"), pk=pk)
+    worktag = entry.worktag
+    if request.method == "POST":
+        entry.delete()
+        messages.success(request, "Funding entry deleted.")
+        return redirect(safe_next(request, worktag.get_absolute_url()))
+    return confirm_page(
+        request,
+        title=f"Delete the {entry.date:%b %-d, %Y} funding entry on {worktag.code}?",
+        cancel_url=safe_next(request, worktag.get_absolute_url()),
+    )
 
 
 def fund_delete(request, pk):
@@ -110,13 +147,13 @@ def fund_delete(request, pk):
         moved = worktag.transactions.count()
         code = worktag.code
         worktag.delete()
-        note = f" {moved} transactions moved to Review." if moved else ""
+        note = f" {moved} transactions moved to Needs review." if moved else ""
         messages.success(request, f"Deleted {code}.{note}")
         return redirect("ledger:dashboard")
     return confirm_page(
         request,
         title=f"Delete {worktag}?",
-        detail="Its budget, pending entries, and planned appointments are deleted. Transactions are kept and move to Review.",
+        detail="Its funding, pending entries, and planned appointments are deleted. Transactions are kept and move to Needs review.",
         cancel_url=worktag.get_absolute_url(),
     )
 
@@ -129,7 +166,9 @@ def fund_export(request, pk):
     response["Content-Disposition"] = f'attachment; filename="{slugify(worktag.code) or "fund"}-{today}.csv"'
     writer = csv.writer(response)
     writer.writerow(map(csv_safe, ["Fund", worktag.code, worktag.name]))
-    writer.writerow(["Start", worktag.start_date or "", "End", worktag.end_date or "", "F&A rate %", worktag.fa_rate])
+    writer.writerow(["Start", summary.start_date or "", "End", summary.end_date or "", "F&A rate %", worktag.fa_rate])
+    for entry in worktag.funding.order_by("date", "id"):
+        writer.writerow(["Funding", entry.date, entry.amount, csv_safe(entry.description)])
     writer.writerow(["Generated", today])
     writer.writerow([])
     writer.writerow(["Category", "Budget", "Actual", "Pending", "Planned", "Projected", "Remaining now", "Projected remaining"])

@@ -1,6 +1,9 @@
 """Budget vs. actuals, planned payroll, F&A, burn rate, runway, and alerts for each fund.
 
 Rules (kept deliberately explainable):
+* Budget = the fund's funding entries (award, gifts, top-ups). State funds lapse on June 30, so only
+  the current fiscal year's allocation and spending are counted. Without funding entries the
+  category budget lines are the budget.
 * Actuals = imported/manual transactions. Uncategorized amounts count as "Other".
 * Payroll salary with no fringe line for the same person and month gets estimated fringe.
 * Fringe and tuition use the person type's rate for the fiscal year (July–June) each month
@@ -17,9 +20,10 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.db.models import Q
 from django.utils import timezone
 
-from ..models import ZERO, Category, PendingEntry, Person, Transaction, Worktag
+from ..models import ZERO, Category, PendingEntry, Person, Transaction, Worktag, WorktagType
 from .rates import RateTable, fiscal_year
 
 BURN_WINDOW_MONTHS = 6
@@ -108,11 +112,14 @@ class FundSummary:
     monthly_planned: dict[dt.date, Decimal]
     burn_months: int = 0  # how many complete months the burn rate averages over
     alerts: list[Alert] = field(default_factory=list)
+    start_date: dt.date | None = None  # fiscal year start for state funds, else the award start
+    end_date: dt.date | None = None  # June 30 for state funds, else the award end
+    period_label: str = ""  # "FY2027" for state funds
+    has_category_budgets: bool = False
 
     @property
     def days_left(self) -> int | None:
-        end = self.worktag.end_date
-        return (end - timezone.localdate()).days if end else None
+        return (self.end_date - timezone.localdate()).days if self.end_date else None
 
 
 def summarize_fund(
@@ -122,6 +129,9 @@ def summarize_fund(
     rates: RateTable | None = None,
 ) -> FundSummary:
     today = today or timezone.localdate()
+    period_start, period_end = worktag.period(today)  # fiscal year for state funds, else (None, None)
+    fund_start = period_start or worktag.start_date
+    fund_end = period_end or worktag.end_date
     categories = categories if categories is not None else list(Category.objects.all())
     rates = rates if rates is not None else RateTable()
     by_code = {c.code: c for c in categories}
@@ -136,6 +146,9 @@ def summarize_fund(
 
     for budget_line in worktag.budget_lines.all():
         lines[budget_line.category_id].budget += budget_line.amount
+    all_funding = list(worktag.funding.all())
+    in_scope = [f for f in all_funding if period_start is None or period_start <= f.date <= period_end]
+    funded_total = sum((f.amount for f in in_scope), ZERO)
 
     # --- Actuals
     monthly_actual: dict[dt.date, Decimal] = defaultdict(Decimal)
@@ -144,7 +157,10 @@ def summarize_fund(
     covered = {Category.SALARIES: set(), Category.FRINGE: set(), Category.TUITION: set()}
     uncategorized = ignored_fa = ZERO
     other = line_for(Category.OTHER)
-    rows = Transaction.objects.filter(worktag=worktag).values_list("category_id", "person_id", "date", "amount")
+    spending = Transaction.objects.filter(worktag=worktag)
+    if period_start:
+        spending = spending.filter(date__range=(period_start, period_end))
+    rows = spending.values_list("category_id", "person_id", "date", "amount")
     for category_id, person_id, date, amount in rows:
         month = month_start(date)
         code = code_of.get(category_id)
@@ -226,8 +242,9 @@ def summarize_fund(
     past_planned_months: set[dt.date] = set()  # months already over with planned pay but no payroll actual
     unlinked_salary_months = sorted({month for person_id, month in covered[Category.SALARIES] if person_id is None})
     for appointment in appointments:
-        start = max(appointment.start_date, worktag.tracking_start or appointment.start_date)
-        end = appointment.end_date
+        start, end = appointment.start_date, appointment.end_date
+        if period_start:  # state money: only the part of the appointment inside this fiscal year
+            start, end = max(start, period_start), min(end, period_end)
         person_type = appointment.person.person_type
         if person_type is None and appointment.fringe_rate_override is None:
             people_without_type.add(appointment.person.alias)
@@ -268,7 +285,10 @@ def summarize_fund(
         plan_rows.append(plan)
 
     # --- Pending entries
-    pending_entries = list(worktag.pending_entries.filter(status=PendingEntry.Status.PENDING))
+    pending_qs = worktag.pending_entries.filter(status=PendingEntry.Status.PENDING)
+    if period_start:
+        pending_qs = pending_qs.filter(Q(expected_date__isnull=True) | Q(expected_date__range=(period_start, period_end)))
+    pending_entries = list(pending_qs)
     for entry in pending_entries:
         lines[entry.category_id].pending += entry.amount
 
@@ -291,8 +311,10 @@ def summarize_fund(
     for line in ordered:
         line.round()
     total = Line(None)
+    line_budget_total = sum((line.budget for line in ordered), ZERO)
+    has_category_budgets = line_budget_total > 0
+    total.budget = funded_total if (all_funding or worktag.lapses_yearly) else line_budget_total
     for line in ordered:
-        total.budget += line.budget
         total.actual += line.actual
         total.pending += line.pending
         total.planned += line.planned
@@ -303,15 +325,15 @@ def summarize_fund(
     # Average over the last 6 complete months, but not before the fund started or spending began,
     # so a fund with one month of history isn't averaged over six.
     window_start = add_months(current, -BURN_WINDOW_MONTHS)
-    if worktag.start_date:
-        window_start = max(window_start, month_start(worktag.start_date))
+    if fund_start:
+        window_start = max(window_start, month_start(fund_start))
     if monthly_actual:
         window_start = max(window_start, min(monthly_actual))
     window = [m for m in iter_months(window_start, current - dt.timedelta(days=1))] if window_start < current else []
     burn_rate = cents(sum((monthly_actual.get(m, ZERO) for m in window), ZERO) / len(window)) if window else None
     months_left = None
-    if worktag.end_date:
-        months_left = max(ZERO, Decimal((worktag.end_date - today).days) / DAYS_PER_MONTH).quantize(Decimal("0.1"))
+    if fund_end:
+        months_left = max(ZERO, Decimal((fund_end - today).days) / DAYS_PER_MONTH).quantize(Decimal("0.1"))
     runway = run_out = burn_end = None
     if burn_rate and burn_rate > 0:
         runway = max(ZERO, total.remaining / burn_rate).quantize(Decimal("0.1"))
@@ -333,10 +355,17 @@ def summarize_fund(
         monthly_actual=dict(monthly_actual),
         monthly_planned=dict(monthly_planned),
         burn_months=len(window),
+        start_date=fund_start,
+        end_date=fund_end,
+        period_label=f"FY{fiscal_year(today)}" if worktag.lapses_yearly else "",
+        has_category_budgets=has_category_budgets,
     )
+    meals = by_code.get("meals")
     summary.alerts = _fund_alerts(
         summary, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll, carried,
         past_planned_months, unlinked_salary_months, bool(appointments),
+        line_budget_total=line_budget_total, has_funding=bool(all_funding),
+        food_total=lines[meals.pk].actual if meals else ZERO,
     )
     return summary
 
@@ -348,33 +377,48 @@ def _money(value: Decimal) -> str:
 
 def _fund_alerts(
     s, today, pending_entries, uncategorized, ignored_fa, people_without_type, unestimated_payroll, carried,
-    past_planned_months, unlinked_salary_months, has_appointments,
+    past_planned_months, unlinked_salary_months, has_appointments, *, line_budget_total, has_funding, food_total,
 ):
     w, total, alerts = s.worktag, s.total, []
+    end = s.end_date
+    state = w.lapses_yearly
 
     def add(level, message):
         alerts.append(Alert(level, message, w))
 
     if not total.budget:
-        add("info", "No budget entered yet.")
+        if state:
+            add("info", f"No allocation entered for {s.period_label}. Add it under Funding.")
+        else:
+            add("info", "No funding entered yet. Add the amount under Funding.")
     elif total.remaining < 0:
         add("danger", f"Over budget by {_money(-total.remaining)} (spent + pending).")
     elif total.projected_remaining < 0:
         add("danger", f"Projected to overspend by {_money(-total.projected_remaining)} including planned payroll.")
-    if total.budget:
+    if total.budget and s.has_category_budgets:
         for line in s.lines:
             if line.budget and line.projected_remaining < 0 and total.projected_remaining >= 0:
                 add("warn", f"{line.category.name} projected over its budget by {_money(-line.projected_remaining)}.")
             elif not line.budget and line.projected > 0:
                 add("info", f"{line.category.name} has spending ({_money(line.projected)}) but no budget line.")
-    if w.end_date and s.run_out_date and s.run_out_date < w.end_date and total.remaining > 0:
+        if has_funding and abs(line_budget_total - total.budget) >= 1:
+            add("info", f"Category budgets add up to {_money(line_budget_total)} but the funding is {_money(total.budget)}.")
+    if end and s.run_out_date and s.run_out_date < end and total.remaining > 0:
         basis = f"average of the last {s.burn_months} months" if s.burn_months > 1 else "based on one month of spending"
+        when = "before the fiscal year ends" if state else "before the end date"
         add("warn", f"At the current burn rate ({_money(s.burn_rate)}/month, {basis}) money runs out around "
-                    f"{s.run_out_date:%b %Y}, before the end date.")
-    if w.end_date and w.is_active:
-        days = (w.end_date - today).days
+                    f"{s.run_out_date:%b %Y}, {when}.")
+    if end and w.is_active:
+        days = (end - today).days
         if days < 0:
-            add("info", f"Ended {w.end_date:%b %-d, %Y}. Mark it inactive once it's closed out.")
+            add("info", f"Ended {end:%b %-d, %Y}. Mark it inactive once it's closed out.")
+        elif state:
+            unspent = s.burn_projected_end if s.burn_projected_end is not None else total.projected_remaining
+            if total.budget and unspent > total.budget * Decimal("0.1") and days <= 150:
+                add("warn", f"{s.period_label} ends {end:%b %-d} ({days} days). At the current pace about "
+                            f"{_money(unspent)} will go unspent and lapse.")
+            elif days <= 60:
+                add("info", f"{s.period_label} ends {end:%b %-d} ({days} days).")
         elif days <= 90:
             unspent = total.projected_remaining
             if total.budget and unspent > total.budget * Decimal("0.1"):
@@ -383,7 +427,7 @@ def _fund_alerts(
                 add("info", f"Ends in {days} days.")
     for plan in s.plan_rows:
         appointment = plan["appointment"]
-        if w.end_date and appointment.end_date > w.end_date:
+        if end and not state and appointment.end_date > end:
             add("warn", f"{appointment.person.alias}'s appointment runs past the fund end date.")
     overdue = [e for e in pending_entries if e.expected_date and (today - e.expected_date).days > 30]
     if overdue:
@@ -391,10 +435,14 @@ def _fund_alerts(
                     "expected date. Reconcile or cancel.")
     if ignored_fa:
         add("warn", f"{_money(ignored_fa)} of imported F&A lines ignored because F&A is calculated from the rate.")
-    if w.fa_rate and not any(line.category.code == Category.FA and line.budget for line in s.lines):
+    if w.fa_rate and s.has_category_budgets and not any(line.category.code == Category.FA and line.budget for line in s.lines):
         add("info", "F&A rate is set but there's no F&A budget line.")
+    if food_total > 0 and w.type == WorktagType.GRANT:
+        add("warn", f"{_money(food_total)} of food and meals is charged to this grant. Federal awards often don't "
+                    "allow it, so check the award terms.")
     if uncategorized:
-        add("warn", f"{_money(uncategorized)} uncategorized (counted as Other). Assign categories under Review.")
+        add("warn", f"{_money(uncategorized)} uncategorized (counted as Other). Assign categories under "
+                    "Transactions > Needs review.")
     if people_without_type:
         add("warn", "Set a person type (fringe rate) for: " + ", ".join(sorted(people_without_type)) + ".")
     if unestimated_payroll:
@@ -408,8 +456,8 @@ def _fund_alerts(
         first, last = min(past_planned_months), max(past_planned_months)
         span = f"{first:%b %Y}" if first == last else f"{first:%b %Y} – {last:%b %Y}"
         add("info", f"{len(past_planned_months)} past month{'s' if len(past_planned_months) != 1 else ''} ({span}) "
-                    "of planned payroll have no payroll actuals yet. Import payroll, or set the fund's tracking "
-                    "start date if that spending is already covered by an opening balance.")
+                    "of planned payroll have no payroll actuals yet. Import payroll, or start the appointment later "
+                    "if that spending is already covered.")
     no_rates = sorted({name for (name, _), source in carried.items() if source is None})
     if no_rates:
         add("warn", "No fringe rates entered for: " + ", ".join(no_rates) + ". Add them under Settings.")
