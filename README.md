@@ -139,13 +139,16 @@ Production mode sets secure-only cookies and redirects to HTTPS, so **put a TLS-
 3. Start it and create your account:
 
    ```bash
-   docker compose up -d --build
+   docker compose pull
+   docker compose up -d
    docker compose exec web python manage.py createsuperuser
    ```
 
 4. Point your reverse proxy at `127.0.0.1:8020` (the app listens on loopback only), open the site, and enroll 2FA right away.
 
-**Updating:** `docker compose pull && docker compose up -d` for the prebuilt image (pin a release with `IMAGE_TAG=1.2.3`), or `docker compose up -d --build` to build on the host. Containers labelled for [Watchtower](https://containrrr.dev/watchtower/) update themselves when a new image is published.
+**Updating:** the `web` container is labelled for [Watchtower](https://containrrr.dev/watchtower/), so it updates itself within one polling interval of a new image being published. By hand: `docker compose pull && docker compose up -d` (pin a release with `IMAGE_TAG=1.2.3`).
+
+> **Don't build on the server** (`docker compose up -d --build`) if you rely on Watchtower. A locally built image has no registry digest, so Watchtower never sees it as outdated and the app silently stops updating. If you did build locally, run `docker compose pull && docker compose up -d` once to switch back to the published image.
 
 **Backups** (keep dumps out of the repo; `*.sql`, `*.dump` and `backups/` are git-ignored):
 
