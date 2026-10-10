@@ -5,15 +5,15 @@
 <div class="page-head">
   <h1>Funds</h1>
   <div class="actions">
-    <a class="btn" href="{% url 'ledger:imports' %}">Import report</a>
-    <a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">Add fund</a>
+    <a class="btn" href="{% url 'ledger:imports' %}">{% include "partials/icon.html" with name="arrow-up-tray" %}Import report</a>
+    <a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">{% include "partials/icon.html" with name="plus" %}Add fund</a>
   </div>
 </div>
 
 {% if global_alerts or fund_alerts %}
 <section class="alerts" aria-label="Alerts">
-  {% for alert in global_alerts %}<a class="alert alert-{{ alert.level }}" href="{{ alert.url }}">{{ alert.message }}</a>{% endfor %}
-  {% for alert in fund_alerts %}<a class="alert alert-{{ alert.level }}" href="{% url 'ledger:fund_detail' alert.worktag.pk %}"><strong>{{ alert.worktag.code }}</strong> {{ alert.message }}</a>{% endfor %}
+  {% for alert in global_alerts %}<a class="alert alert-{{ alert.level }}" href="{{ alert.url }}">{% include "partials/alert_icon.html" with level=alert.level %}<span>{{ alert.message }}</span></a>{% endfor %}
+  {% for alert in fund_alerts %}<a class="alert alert-{{ alert.level }}" href="{% url 'ledger:fund_detail' alert.worktag.pk %}">{% include "partials/alert_icon.html" with level=alert.level %}<span><strong>{{ alert.worktag.code }}</strong> {{ alert.message }}</span></a>{% endfor %}
 </section>
 {% endif %}
 
@@ -63,6 +63,7 @@
 </p>
 {% else %}
 <section class="card empty">
+  {% include "partials/icon.html" with name="banknotes" class="empty-icon" %}
   <h2>Start by adding a fund</h2>
   <p>Add each grant, gift, cost center, project, or program you track, with its Workday worktag ID and budget. Then import Workday expense reports and OneUSG payroll worksheets.</p>
   <p><a class="btn btn-primary" href="{% url 'ledger:fund_create' %}">Add fund</a></p>

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
 
@@ -143,14 +144,6 @@ class BudgetLine(models.Model):
 
 class PersonType(models.Model):
     name = models.CharField(max_length=80, unique=True)
-    fringe_rate = models.DecimalField("Fringe rate (%)", max_digits=6, decimal_places=3, default=ZERO)
-    tuition_monthly = models.DecimalField(
-        "Tuition remission / month",
-        max_digits=10,
-        decimal_places=2,
-        default=ZERO,
-        help_text="Default monthly tuition charge (e.g., GSTRP) at 100% effort. 0 if none.",
-    )
     sort_order = models.PositiveIntegerField(default=100)
 
     class Meta:
@@ -158,6 +151,28 @@ class PersonType(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class FiscalYearRate(models.Model):
+    """Fringe rate and monthly tuition remission for one person type in one fiscal year (July–June)."""
+
+    person_type = models.ForeignKey(PersonType, related_name="rates", on_delete=models.CASCADE)
+    fiscal_year = models.PositiveSmallIntegerField(
+        help_text="Year the fiscal year ends: 2027 means July 2026 to June 2027."
+    )
+    fringe_rate = models.DecimalField("Fringe rate (%)", max_digits=6, decimal_places=3, null=True, blank=True)
+    tuition_monthly = models.DecimalField(
+        "Tuition remission / month", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+
+    class Meta:
+        ordering = ["person_type__sort_order", "fiscal_year"]
+        constraints = [
+            models.UniqueConstraint(fields=["person_type", "fiscal_year"], name="one_rate_row_per_fiscal_year")
+        ]
+
+    def __str__(self):
+        return f"{self.person_type} FY{self.fiscal_year}"
 
 
 class Person(models.Model):
@@ -207,16 +222,25 @@ class Appointment(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     monthly_salary = models.DecimalField(
-        max_digits=12, decimal_places=2, help_text="Full monthly salary at 100% effort."
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(ZERO)],
+        help_text="Full monthly salary at 100% effort.",
     )
-    effort_pct = models.DecimalField("Effort on this fund (%)", max_digits=6, decimal_places=2, default=Decimal("100"))
+    effort_pct = models.DecimalField(
+        "Effort on this fund (%)",
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("100"),
+        validators=[MinValueValidator(ZERO), MaxValueValidator(Decimal("100"))],
+    )
     fringe_rate_override = models.DecimalField(
         "Fringe rate override (%)",
         max_digits=6,
         decimal_places=3,
         null=True,
         blank=True,
-        help_text="Leave blank to use the person type's rate.",
+        help_text="Leave blank to use the person type's rate for each fiscal year.",
     )
     tuition_monthly_override = models.DecimalField(
         "Tuition / month override",
@@ -224,7 +248,7 @@ class Appointment(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="Leave blank to use the person type's default. Charged in proportion to effort.",
+        help_text="Leave blank to use the person type's rate for each fiscal year. Charged in proportion to effort.",
     )
     notes = models.CharField(max_length=200, blank=True)
 
@@ -237,18 +261,6 @@ class Appointment(models.Model):
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "End date must be on or after the start date."})
-
-    @property
-    def fringe_rate(self) -> Decimal:
-        if self.fringe_rate_override is not None:
-            return self.fringe_rate_override
-        return self.person.person_type.fringe_rate if self.person.person_type else ZERO
-
-    @property
-    def tuition_monthly(self) -> Decimal:
-        if self.tuition_monthly_override is not None:
-            return self.tuition_monthly_override
-        return self.person.person_type.tuition_monthly if self.person.person_type else ZERO
 
     @property
     def monthly_charge(self) -> Decimal:
@@ -344,8 +356,9 @@ class Transaction(models.Model):
     raw_worktags = models.TextField("Worktags in file", blank=True)
     raw_status = models.CharField("Status in file", max_length=60, blank=True)
     is_estimate = models.BooleanField(default=False, help_text="Calculated rather than reported (e.g., fringe from rate).")
+    # SET_NULL: removing an old import record must never delete the spending it brought in (use Undo for that).
     batch = models.ForeignKey(
-        ImportBatch, null=True, blank=True, on_delete=models.CASCADE, related_name="transactions"
+        ImportBatch, null=True, blank=True, on_delete=models.SET_NULL, related_name="transactions"
     )
     dedupe_key = models.CharField(max_length=64, null=True, blank=True, unique=True)
     notes = models.TextField(blank=True)
@@ -380,7 +393,7 @@ class PendingEntry(models.Model):
         Transaction, null=True, blank=True, on_delete=models.SET_NULL, related_name="reconciled_pending"
     )
     batch = models.ForeignKey(
-        ImportBatch, null=True, blank=True, on_delete=models.CASCADE, related_name="pending_entries"
+        ImportBatch, null=True, blank=True, on_delete=models.SET_NULL, related_name="pending_entries"
     )
     dedupe_key = models.CharField(max_length=64, null=True, blank=True, unique=True)
     notes = models.TextField(blank=True)

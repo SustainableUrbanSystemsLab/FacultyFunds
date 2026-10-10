@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "facultybudget",
+      "name": "facultyfunds",
       "runtimeExecutable": "uv",
       "runtimeArgs": ["run", "python", "manage.py", "runserver", "127.0.0.1:8000"],
       "port": 8000

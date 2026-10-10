@@ -65,14 +65,15 @@ def transaction_form(request, pk=None):
     if txn is None:
         initial = {"worktag": request.GET.get("fund") or None}
     form = TransactionForm(request.POST or None, instance=txn, initial=initial)
+    next_url = safe_next(request, "ledger:transactions")
     if request.method == "POST" and form.is_valid():
         saved = form.save(commit=False)
         if txn is None:
             saved.source = Source.MANUAL
         saved.save()
         messages.success(request, "Transaction saved.")
-        return redirect(safe_next(request, "ledger:transactions"))
-    return render(request, "ledger/transaction_form.html", {"form": form, "txn": txn, "next": request.GET.get("next", "")})
+        return redirect(next_url)
+    return render(request, "ledger/transaction_form.html", {"form": form, "txn": txn, "next": next_url})
 
 
 def transaction_delete(request, pk):

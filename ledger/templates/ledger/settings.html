@@ -3,12 +3,35 @@
 {% block content %}
 <div class="page-head"><h1>Settings</h1></div>
 
+<section class="card flush" id="rates">
+  <h2 class="card-title">Fringe and tuition rates by fiscal year</h2>
+  <div class="card-body small muted">
+    <p>Fiscal years run July 1 to June 30 and are named by the year they end, so FY{{ current_fy }} runs July {{ current_fy|add:"-1" }} to June {{ current_fy }}. Projections apply the rate for the fiscal year each month falls in.</p>
+    <p>A blank cell reuses the closest earlier year, and the gray value shows what applies. Once a new year's rates are published, fill in that column. The FY2025 values are Georgia Tech's published rates (fringe: 31.7% full benefits, 23.9% limited, 7.9% graduate student health, 1.5% partial; GSTRP: $1,596/month).</p>
+  </div>
+  <form method="get" action="{% url 'ledger:settings' %}" class="card-body actions">
+    {% for year in rates_form.fiscal_years %}<input type="hidden" name="fy" value="{{ year }}">{% endfor %}
+    <label class="inline">Add fiscal year <input type="number" name="fy" min="2000" max="2100" placeholder="{{ rates_form.fiscal_years|last|add:1 }}"></label>
+    <button class="btn btn-small" type="submit">Add column</button>
+  </form>
+  <form method="post" action="{% url 'ledger:settings' %}">
+    {% csrf_token %}
+    <input type="hidden" name="which" value="rates">
+    {% for year in rates_form.fiscal_years %}<input type="hidden" name="fy" value="{{ year }}">{% endfor %}
+    <h3 class="card-subtitle">Fringe rate (% of salary)</h3>
+    {% include "ledger/partials/rate_grid.html" with rows=rates_form.fringe_rows %}
+    <h3 class="card-subtitle">Tuition remission ($ per month at 100% effort)</h3>
+    {% include "ledger/partials/rate_grid.html" with rows=rates_form.tuition_rows %}
+    <div class="card-body actions">
+      <button class="btn btn-primary" type="submit">Save rates</button>
+      <span class="small muted">Clear every cell in a column to remove that year.</span>
+    </div>
+  </form>
+</section>
+
 <section class="card flush" id="person_types">
-  <h2 class="card-title">Person types: fringe and tuition</h2>
-  <p class="card-body small muted">
-    The defaults come from Georgia Tech's FY2025 schedules: fringe is 31.7% for full benefits, 23.9% for limited benefits, 7.9% for graduate student health insurance, and 1.5% for partial benefits. Tuition remission (GSTRP) is $1,596 per month.
-    Confirm the current rates with your grants office and update them here. Projections use these for anyone without an override on their appointment.
-  </p>
+  <h2 class="card-title">Person types</h2>
+  <p class="card-body small muted">Each person is assigned a type, and the type decides which rates apply. Types added here get a row in the rate grid above.</p>
   {% include "ledger/partials/formset_table.html" with formset=person_type_formset which="person_types" %}
 </section>
 

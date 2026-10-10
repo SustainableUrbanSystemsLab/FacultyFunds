@@ -11,13 +11,13 @@
 <section class="card flush">
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Alias</th><th>Type</th><th class="num">Fringe</th><th class="num">Appointments</th><th class="num">Transactions</th></tr></thead>
+      <thead><tr><th>Alias</th><th>Type</th><th class="num">Fringe FY{{ current_fy }}</th><th class="num">Appointments</th><th class="num">Transactions</th></tr></thead>
       <tbody>
       {% for p in people %}
         <tr{% if not p.is_active %} class="row-muted"{% endif %}>
           <td><a href="{% url 'ledger:person_detail' p.pk %}"><strong>{{ p.alias }}</strong></a></td>
           <td>{% if p.person_type %}{{ p.person_type.name }}{% else %}<span class="badge badge-warn">not set</span>{% endif %}</td>
-          <td class="num">{% if p.person_type %}{{ p.person_type.fringe_rate|trim_decimal }}%{% else %}—{% endif %}</td>
+          <td class="num">{% if not p.person_type %}—{% elif p.fringe_source is None %}<a href="{% url 'ledger:settings' %}#rates"><span class="badge badge-warn">not set</span></a>{% else %}{{ p.fringe_now|trim_decimal }}%{% if p.fringe_source != current_fy %}<div class="sub">from FY{{ p.fringe_source }}</div>{% endif %}{% endif %}</td>
           <td class="num">{{ p.appointment_count }}</td>
           <td class="num">{{ p.transaction_count }}</td>
         </tr>

@@ -31,11 +31,12 @@ def pending_form(request, pk=None):
     entry = get_object_or_404(PendingEntry, pk=pk) if pk else None
     initial = {"worktag": request.GET.get("fund") or None} if entry is None else None
     form = PendingEntryForm(request.POST or None, instance=entry, initial=initial)
+    next_url = safe_next(request, "ledger:pending")
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Pending entry saved.")
-        return redirect(safe_next(request, "ledger:pending"))
-    return render(request, "ledger/pending_form.html", {"form": form, "entry": entry, "next": request.GET.get("next", "")})
+        return redirect(next_url)
+    return render(request, "ledger/pending_form.html", {"form": form, "entry": entry, "next": next_url})
 
 
 def pending_delete(request, pk):

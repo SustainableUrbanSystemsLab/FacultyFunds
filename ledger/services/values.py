@@ -18,6 +18,7 @@ _DATE_FORMATS_US = [
     "%m/%d/%Y %I:%M:%S %p",
 ]
 _DATE_FORMATS_ANY = [
+    "%Y-%m-%d",
     "%Y/%m/%d",
     "%d-%b-%Y",
     "%d-%b-%y",

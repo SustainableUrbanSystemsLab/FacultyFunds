@@ -9,6 +9,7 @@ import datetime as dt
 import email
 import io
 import logging
+import re
 import zipfile
 from email import policy
 from html.parser import HTMLParser
@@ -18,6 +19,8 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 MAX_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
+# Control characters other than tab/newline. Postgres JSON rejects the NUL character, and none are meaningful.
+_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 class FileParseError(ValueError):
@@ -41,6 +44,7 @@ def cell_to_text(value) -> str:
     if isinstance(value, int):
         return str(value)
     text = str(value).replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+    text = _CONTROL_CHARS.sub("", text)
     return "\n".join(" ".join(line.split()) for line in text.split("\n")).strip()
 
 

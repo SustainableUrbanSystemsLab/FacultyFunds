@@ -3,8 +3,9 @@
 {% block main_class %}auth{% endblock %}
 {% block content %}
 <div class="auth-card">
+  {% include "partials/brand.html" %}
   <h1>Enter your code</h1>
-  <p class="muted">Open your authenticator app and enter the 6-digit code for Faculty Budget. Lost your phone? Enter one of your backup codes instead.</p>
+  <p class="muted">Open your authenticator app and enter the 6-digit code for Faculty Funds. Lost your phone? Enter one of your backup codes instead.</p>
   <form method="post">
     {% csrf_token %}
     {% include "partials/field.html" with field=form.token %}

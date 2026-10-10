@@ -14,6 +14,21 @@
     true
   );
 
+  // Forms that must not be submitted twice (e.g. import commit): disable buttons after the first click.
+  document.addEventListener("submit", function (event) {
+    var form = event.target.closest("form[data-single-submit]");
+    if (!form) return;
+    if (form.dataset.submitted) {
+      event.preventDefault();
+      return;
+    }
+    form.dataset.submitted = "1";
+    form.querySelectorAll("button[type=submit]").forEach(function (button) {
+      button.disabled = true;
+      button.setAttribute("aria-disabled", "true");
+    });
+  });
+
   // "Select all" checkbox inside a bulk-edit form.
   document.addEventListener("change", function (event) {
     var toggle = event.target.closest("[data-select-all]");
@@ -22,6 +37,37 @@
     scope.querySelectorAll('input[type="checkbox"][name="ids"]').forEach(function (box) {
       box.checked = toggle.checked;
     });
+  });
+
+  // Theme toggle: system -> light -> dark -> system (saved per browser).
+  var root = document.documentElement;
+  var describeTheme = function (button, theme) {
+    var text = "Theme: " + theme + " (click to change)";
+    button.title = text;
+    button.setAttribute("aria-label", text);
+  };
+  document.querySelectorAll("[data-theme-toggle]").forEach(function (button) {
+    describeTheme(button, root.getAttribute("data-theme") || "system");
+  });
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest("[data-theme-toggle]");
+    if (!button) return;
+    var current = root.getAttribute("data-theme") || "system";
+    var next = current === "system" ? "light" : current === "light" ? "dark" : "system";
+    root.classList.add("no-transitions");
+    if (next === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", next);
+    window.getComputedStyle(root).color; // apply the new colors before transitions come back
+    window.setTimeout(function () {
+      root.classList.remove("no-transitions");
+    }, 0);
+    try {
+      if (next === "system") localStorage.removeItem("fb-theme");
+      else localStorage.setItem("fb-theme", next);
+    } catch (error) {
+      // Not persisted; the choice still applies to this page.
+    }
+    describeTheme(button, next);
   });
 
   // Running total on the fund budget form.

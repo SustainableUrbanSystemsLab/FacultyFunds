@@ -5,6 +5,7 @@ from .models import (
     BudgetLine,
     Category,
     CategoryRule,
+    FiscalYearRate,
     ImportBatch,
     ImportProfile,
     PendingEntry,
@@ -63,4 +64,15 @@ class ImportBatchAdmin(admin.ModelAdmin):
     exclude = ["sheets", "person_tokens"]
 
 
-admin.site.register([Category, CategoryRule, PersonType, Appointment, ImportProfile])
+class FiscalYearRateInline(admin.TabularInline):
+    model = FiscalYearRate
+    extra = 0
+
+
+@admin.register(PersonType)
+class PersonTypeAdmin(admin.ModelAdmin):
+    list_display = ["name", "sort_order"]
+    inlines = [FiscalYearRateInline]
+
+
+admin.site.register([Category, CategoryRule, Appointment, ImportProfile])

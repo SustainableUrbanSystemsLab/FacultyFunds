@@ -1,4 +1,4 @@
-"""Django settings for Faculty Budget.
+"""Django settings for Faculty Funds.
 
 Deployment-specific values come from environment variables (see .env.example).
 For local development a `.env` file in the project root is loaded if present.
@@ -176,6 +176,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 IMPORT_MAX_BYTES = 10 * 1024 * 1024
 IMPORT_MAX_ROWS = 50_000
 STAGED_IMPORT_TTL_HOURS = 24
+FILE_UPLOAD_HANDLERS = ["ledger.uploads.MemoryOnlyUploadHandler"]
 FILE_UPLOAD_MAX_MEMORY_SIZE = IMPORT_MAX_BYTES + 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = IMPORT_MAX_BYTES + 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
@@ -202,7 +203,7 @@ if not DEBUG and not TESTING:
     SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", 60 * 60 * 24 * 365))
 
 # Two-factor authentication
-OTP_TOTP_ISSUER = os.environ.get("OTP_ISSUER", "Faculty Budget")
+OTP_TOTP_ISSUER = os.environ.get("OTP_ISSUER", "Faculty Funds")
 
 # Login lockout (django-axes): 5 failures per username+IP locks for 1 hour.
 AXES_FAILURE_LIMIT = 5

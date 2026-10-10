@@ -9,6 +9,7 @@ from .models import (
     BudgetLine,
     Category,
     CategoryRule,
+    FiscalYearRate,
     PendingEntry,
     Person,
     PersonType,
@@ -16,6 +17,7 @@ from .models import (
     Worktag,
 )
 from .services.importer import DEFAULT_SKIP_STATUSES
+from .services.rates import RateTable
 from .services.mapping import FIELDS
 from .services.values import parse_month_header
 
@@ -39,13 +41,23 @@ class WorktagForm(forms.ModelForm):
         }
 
     def clean_code(self):
-        return self.cleaned_data["code"].strip()
+        return self.cleaned_data["code"].strip().upper()
 
     def clean(self):
         data = super().clean()
         start, end = data.get("start_date"), data.get("end_date")
         if start and end and end < start:
             self.add_error("end_date", "End date must be on or after the start date.")
+        # Every ID must point at exactly one fund, or imported rows become ambiguous.
+        mine = {line.strip().upper() for line in [data.get("code") or "", *(data.get("match_codes") or "").splitlines()]}
+        mine.discard("")
+        others = Worktag.objects.exclude(pk=self.instance.pk) if self.instance.pk else Worktag.objects.all()
+        for other in others:
+            clash = mine & {code.upper() for code in other.all_codes}
+            if clash:
+                field = "code" if (data.get("code") or "").upper() in clash else "match_codes"
+                self.add_error(field, f"{', '.join(sorted(clash))} already belongs to {other.code} ({other.name}).")
+                break
         return data
 
 
@@ -134,13 +146,72 @@ class CategoryForm(forms.ModelForm):
 
 
 CategoryFormSet = forms.modelformset_factory(Category, form=CategoryForm, extra=1, can_delete=True)
-PersonTypeFormSet = forms.modelformset_factory(
-    PersonType, fields=["name", "fringe_rate", "tuition_monthly", "sort_order"], extra=1, can_delete=True
-)
+PersonTypeFormSet = forms.modelformset_factory(PersonType, fields=["name", "sort_order"], extra=1, can_delete=True)
 CategoryRuleFormSet = forms.modelformset_factory(
     CategoryRule, fields=["priority", "keywords", "category"], extra=1, can_delete=True,
     widgets={"keywords": forms.TextInput(attrs={"size": 60})},
 )
+
+class FiscalYearRatesForm(forms.Form):
+    """Grid of fringe rates and monthly tuition: person types as rows, fiscal years as columns.
+
+    Blank cells mean "reuse the closest earlier year"; their placeholder shows the value that applies.
+    """
+
+    METRICS = {
+        "fringe": ("fringe_rate", {"max_digits": 6, "decimal_places": 3, "max_value": 100}, "0.001"),
+        "tuition": ("tuition_monthly", {"max_digits": 10, "decimal_places": 2}, "0.01"),
+    }
+
+    def __init__(self, *args, fiscal_years, person_types, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fiscal_years = list(fiscal_years)
+        self.person_types = list(person_types)
+        rows = list(FiscalYearRate.objects.filter(person_type__in=self.person_types))
+        existing = {(row.person_type_id, row.fiscal_year): row for row in rows}
+        table = RateTable(rows)
+        for person_type in self.person_types:
+            for year in self.fiscal_years:
+                row = existing.get((person_type.pk, year))
+                for prefix, (metric, limits, step) in self.METRICS.items():
+                    value = getattr(row, metric) if row else None
+                    attrs = {"step": step, "inputmode": "decimal", "aria-label": f"{person_type.name}, FY{year}"}
+                    if value is None:
+                        carried, source = table.lookup(person_type.pk, metric, year)
+                        if source is not None:
+                            attrs["placeholder"] = f"{format(carried.normalize(), 'f')} (FY{source})"
+                    self.fields[f"{prefix}_{person_type.pk}_{year}"] = forms.DecimalField(
+                        required=False, min_value=0, initial=value, widget=forms.NumberInput(attrs=attrs), **limits
+                    )
+
+    def _rows(self, prefix):
+        return [
+            (person_type, [self[f"{prefix}_{person_type.pk}_{year}"] for year in self.fiscal_years])
+            for person_type in self.person_types
+        ]
+
+    @property
+    def fringe_rows(self):
+        return self._rows("fringe")
+
+    @property
+    def tuition_rows(self):
+        return self._rows("tuition")
+
+    def save(self):
+        for person_type in self.person_types:
+            for year in self.fiscal_years:
+                values = {
+                    metric: self.cleaned_data.get(f"{prefix}_{person_type.pk}_{year}")
+                    for prefix, (metric, _, _) in self.METRICS.items()
+                }
+                if all(value is None for value in values.values()):
+                    FiscalYearRate.objects.filter(person_type=person_type, fiscal_year=year).delete()
+                else:
+                    FiscalYearRate.objects.update_or_create(
+                        person_type=person_type, fiscal_year=year, defaults=values
+                    )
+
 
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv", ".tsv", ".txt", ".htm", ".html", ".mht", ".mhtml"}
 
