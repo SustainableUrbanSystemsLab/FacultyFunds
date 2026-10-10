@@ -1,0 +1,2 @@
+# `git archive` (and the zip download on GitHub) fills in VERSION with the release this commit belongs to.
+VERSION export-subst

@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django_otp.oath import totp
@@ -140,3 +140,10 @@ class DashboardQueryBudgetTests(OwnerClientMixin, TestCase):
             response = self.client.get(reverse("ledger:dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertLessEqual(len(queries), 30, "the dashboard should not run queries per fund")
+
+
+class WarmUpTests(SimpleTestCase):
+    def test_warm_up_loads_everything_without_touching_the_database(self):
+        from config.wsgi import warm_up
+
+        warm_up()  # SimpleTestCase raises on any database access

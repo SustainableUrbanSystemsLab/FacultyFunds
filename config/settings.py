@@ -11,6 +11,8 @@ from pathlib import Path
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
+from .version import resolve as resolve_app_version
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -31,6 +33,9 @@ def _load_dotenv(path: Path) -> None:
 
 
 _load_dotenv(BASE_DIR / ".env")
+
+# The release this build belongs to (git tag), shown in the footer. See config/version.py.
+APP_VERSION = resolve_app_version(BASE_DIR)
 
 
 def env_bool(name: str, default: bool = False) -> bool:
@@ -119,6 +124,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "ledger.context_processors.navigation",
+                "ledger.context_processors.app_version",
             ],
         },
     },

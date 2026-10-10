@@ -49,7 +49,9 @@
 </main>
 {% if user.is_authenticated and user.is_verified %}
   <footer class="site-footer">
-    <div class="site-footer-inner">Faculty Funds · <a href="https://github.com/SustainableUrbanSystemsLab/facultyfunds">Source on GitHub</a></div>
+    <div class="site-footer-inner">Faculty Funds ·
+      {% if app_is_release %}<a href="https://github.com/SustainableUrbanSystemsLab/FacultyFunds/releases/tag/{{ app_version }}" title="Release notes">{{ app_version }}</a>{% else %}<span title="Not an exact release">{{ app_version }}</span>{% endif %}{% if app_commit %} <span class="commit">({{ app_commit }})</span>{% endif %} ·
+      <a href="https://github.com/SustainableUrbanSystemsLab/FacultyFunds">Source on GitHub</a></div>
   </footer>
 {% endif %}
 </body>
