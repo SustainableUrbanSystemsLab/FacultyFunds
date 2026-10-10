@@ -538,3 +538,5 @@ code.secret { display: block; margin-top: 8px; padding: 8px 10px; border-radius:
 /* Collapsible form sections */
 details.card > summary { cursor: pointer; font-weight: 600; color: var(--text-strong); }
 details.card[open] > summary { margin-bottom: 12px; }
+
+.site-footer .commit { color: var(--subtle); font-variant-numeric: tabular-nums; }

@@ -17,6 +17,11 @@ COPY . .
 RUN DJANGO_SECRET_KEY=build-only PII_HMAC_KEY=build-only python manage.py collectstatic --noinput
 
 RUN useradd --create-home --uid 10001 app && chown -R app /app
+# The release workflow passes the version and commit; they show up in the page footer.
+ARG APP_VERSION=""
+ARG APP_COMMIT=""
+ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
+
 USER app
 
 EXPOSE 8000
