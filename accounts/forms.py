@@ -4,10 +4,12 @@ from django import forms
 class TokenForm(forms.Form):
     token = forms.CharField(
         label="Verification code",
-        help_text="The 6-digit code from your authenticator app, or a backup code.",
+        help_text="The 6-digit code from your authenticator app, or one of your saved single-use codes.",
         max_length=20,
-        # id "totp" and the "Verification code" label let password managers (e.g. Bitwarden) recognize
-        # the field and fill a stored TOTP code; autocomplete=one-time-code covers browsers and iOS.
+        # id "totp", the "Verification code" label and autocomplete=one-time-code let password managers
+        # fill a stored TOTP code. Keep the words "backup" and "recovery" out of the label, help text and
+        # nearby text on pages using this form: Bitwarden then treats the field as a recovery-code box
+        # and refuses to fill it.
         widget=forms.TextInput(
             attrs={
                 "id": "totp",

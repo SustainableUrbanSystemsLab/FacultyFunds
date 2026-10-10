@@ -219,3 +219,15 @@ class PasskeyTests(TestCase):
         self.assertRedirects(response, reverse("accounts:security") + "#passkeys", fetch_redirect_response=False)
         self.assertFalse(WebAuthnCredential.objects.filter(pk=mine.pk).exists())
         self.assertTrue(WebAuthnCredential.objects.filter(pk=theirs.pk).exists())
+
+
+class PasswordManagerTests(TestCase):
+    def test_code_page_avoids_words_that_stop_bitwarden_filling_it(self):
+        user = get_user_model().objects.create_user("owner", password=PASSWORD)
+        TOTPDevice.objects.create(user=user, name="phone", confirmed=True)
+        self.client.post(reverse("accounts:login"), {"username": "owner", "password": PASSWORD})
+        page = self.client.get(reverse("accounts:verify")).content.decode().lower()
+        self.assertIn('id="totp"', page)
+        self.assertIn('autocomplete="one-time-code"', page)
+        self.assertNotIn("backup", page)
+        self.assertNotIn("recovery", page)
