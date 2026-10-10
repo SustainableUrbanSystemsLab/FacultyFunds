@@ -231,7 +231,7 @@ code {
   color: inherit; text-decoration: none; transition: opacity 0.15s;
 }
 .brand:hover { opacity: 0.8; text-decoration: none; }
-.brand-logo { display: block; width: 36px; height: 36px; flex-shrink: 0; border-radius: 6px; box-shadow: var(--shadow-sm); }
+.brand-logo { display: block; width: 36px; height: 36px; flex-shrink: 0; }
 .wordmark { font-size: 20px; line-height: 1.2; letter-spacing: 0.05em; white-space: nowrap; }
 .wordmark strong { font-weight: 700; color: var(--text-strong); }
 .wordmark span { font-weight: 300; color: var(--muted); }
@@ -540,3 +540,18 @@ details.card > summary { cursor: pointer; font-weight: 600; color: var(--text-st
 details.card[open] > summary { margin-bottom: 12px; }
 
 .site-footer .commit { color: var(--subtle); font-variant-numeric: tabular-nums; }
+
+/* Passkeys */
+.passkey-status { margin: 8px 0 0; color: var(--muted); }
+.passkey-status:not(.visible) { display: none; }
+.auth-divider {
+  display: flex; align-items: center; gap: 12px; margin: 18px 0;
+  font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--subtle);
+}
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.passkey-list { margin: 0 0 16px; padding: 0; list-style: none; }
+.passkey-list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.passkey-list li:first-child { border-top: 0; }
+.passkey-list > li > .icon { width: 20px; height: 20px; color: var(--muted); }
+.passkey-meta { flex: 1; min-width: 0; }
+.passkey-list form { margin: 0; }
