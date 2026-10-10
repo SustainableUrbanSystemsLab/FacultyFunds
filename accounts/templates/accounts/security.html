@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load otp_webauthn %}
 {% block title %}Security{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Security</h1></div>
@@ -10,6 +11,36 @@
   <ul class="codes">{% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}</ul>
 </section>
 {% endif %}
+
+<section class="card" id="passkeys">
+  <h2>Passkeys</h2>
+  <p class="muted">Sign in with your fingerprint, face, or device PIN instead of a password and code. A passkey can live in a password manager such as Bitwarden or 1Password, in iCloud Keychain or Google Password Manager, or on a security key. It only works on this site's address.</p>
+  {% if passkeys %}
+  <ul class="passkey-list">
+    {% for passkey in passkeys %}
+    <li>
+      {% include "partials/icon.html" with name="key" %}
+      <div class="passkey-meta">
+        <strong>{{ passkey.name|default:"Passkey" }}</strong>
+        <div class="sub">Added {{ passkey.created_at|date:"M j, Y" }}{% if passkey.last_used_at %} · last used {{ passkey.last_used_at|date:"M j, Y" }}{% else %} · not used yet{% endif %}</div>
+      </div>
+      <form method="post" action="{% url 'accounts:passkey_delete' passkey.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-small btn-danger" type="submit" data-confirm="Remove this passkey? You can no longer sign in with it.">{% include "partials/icon.html" with name="trash" %}Remove</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <span id="passkey-registration-placeholder"></span>
+  <template id="passkey-registration-available-template">
+    <button type="button" id="passkey-register-button" class="btn">{% include "partials/icon.html" with name="plus" %}Add a passkey</button>
+    <p id="passkey-register-status-message" class="passkey-status small" role="status"></p>
+  </template>
+  <template id="passkey-registration-unavailable-template">
+    <p class="small muted">This browser can't create passkeys. Try a current version of Safari, Chrome, Edge, or Firefox.</p>
+  </template>
+</section>
 
 <div class="grid-2">
   <section class="card">
@@ -33,4 +64,5 @@
     <p><a class="btn" href="{% url 'accounts:password_change' %}">Change password</a></p>
   </section>
 </div>
+{% render_otp_webauthn_register_scripts %}
 {% endblock %}

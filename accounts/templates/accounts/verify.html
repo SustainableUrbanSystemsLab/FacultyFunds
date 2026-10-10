@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load otp_webauthn %}
 {% block title %}Two-factor check{% endblock %}
 {% block main_class %}auth{% endblock %}
 {% block content %}
@@ -6,6 +7,17 @@
   {% include "partials/brand.html" %}
   <h1>Enter your code</h1>
   <p class="muted">Open your authenticator app and enter the 6-digit code for Faculty Funds. Lost your phone? Enter one of your backup codes instead.</p>
+
+  {% if has_passkeys %}
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <span id="passkey-verification-placeholder"></span>
+  <template id="passkey-verification-available-template">
+    <button type="button" id="passkey-verification-button" class="btn btn-block">{% include "partials/icon.html" with name="finger-print" %}Use a passkey instead</button>
+    <p id="passkey-verification-status-message" class="passkey-status small" role="status"></p>
+    <div class="auth-divider"><span>or enter a code</span></div>
+  </template>
+  {% endif %}
+
   <form method="post">
     {% csrf_token %}
     {% include "partials/field.html" with field=form.token %}
@@ -15,4 +27,5 @@
     {% csrf_token %}<button type="submit" class="linklike">Sign out</button>
   </form>
 </div>
+{% if has_passkeys %}{% render_otp_webauthn_auth_scripts %}{% endif %}
 {% endblock %}

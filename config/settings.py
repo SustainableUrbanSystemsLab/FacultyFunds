@@ -4,6 +4,7 @@ Deployment-specific values come from environment variables (see .env.example).
 For local development a `.env` file in the project root is loaded if present.
 """
 
+import ipaddress
 import os
 import sys
 from pathlib import Path
@@ -82,6 +83,7 @@ INSTALLED_APPS = [
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
+    "django_otp_webauthn",
     "axes",
     "accounts",
     "ledger",
@@ -109,7 +111,38 @@ MIDDLEWARE = [
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",
     "django.contrib.auth.backends.ModelBackend",
+    # Signs a user in from a verified passkey (django-otp-webauthn).
+    "django_otp_webauthn.backends.WebAuthnBackend",
 ]
+
+
+# Passkeys (WebAuthn). A passkey signs in on its own: it is already two factors (the device
+# plus its fingerprint, face or PIN). It can also replace the 6-digit code after a password
+# sign-in. Passkeys are bound to the site's domain (the relying party ID) and need HTTPS,
+# except on http://localhost during development.
+def _is_ip_address(host: str) -> bool:
+    try:
+        ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        return False
+    return True
+
+
+_passkey_hosts = [host.lstrip(".") for host in ALLOWED_HOSTS if host and "*" not in host and not _is_ip_address(host)]
+OTP_WEBAUTHN_RP_NAME = "Faculty Funds"
+OTP_WEBAUTHN_RP_ID = os.environ.get("PASSKEY_RP_ID") or (_passkey_hosts[0] if _passkey_hosts else "localhost")
+
+
+def _passkey_origins() -> list[str]:
+    origins = env_list("PASSKEY_ORIGINS") or CSRF_TRUSTED_ORIGINS or [f"https://{host}" for host in _passkey_hosts]
+    valid = [origin.rstrip("/") for origin in origins if origin.startswith(("https://", "http://localhost"))]
+    if DEBUG or TESTING:
+        valid.append("http://localhost:8000")
+    # Never empty: django-otp-webauthn's system check would otherwise stop the app from starting.
+    return list(dict.fromkeys(valid)) or ["https://localhost"]
+
+
+OTP_WEBAUTHN_ALLOWED_ORIGINS = _passkey_origins()
 
 ROOT_URLCONF = "config.urls"
 

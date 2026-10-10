@@ -9,6 +9,7 @@ admin.site.site_header = "Faculty Funds admin"
 admin.site.site_title = "Faculty Funds admin"
 
 urlpatterns = [
+    path("accounts/webauthn/", include("django_otp_webauthn.urls")),
     path("accounts/", include("accounts.urls")),
     path(settings.ADMIN_URL, admin.site.urls),
     path("", include("ledger.urls")),

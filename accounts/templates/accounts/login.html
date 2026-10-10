@@ -1,11 +1,21 @@
 {% extends "base.html" %}
+{% load otp_webauthn %}
 {% block title %}Sign in{% endblock %}
 {% block main_class %}auth{% endblock %}
 {% block content %}
 <div class="auth-card">
   {% include "partials/brand.html" %}
   <h1>Sign in</h1>
-  <p class="muted">Use your password, then the code from your authenticator app.</p>
+  <p class="muted">Use a passkey, or your password and then the code from your authenticator app.</p>
+
+  {# Filled in by the passkey script when the browser supports passkeys. #}
+  <span id="passkey-verification-placeholder"></span>
+  <template id="passkey-verification-available-template">
+    <button type="button" id="passkey-verification-button" class="btn btn-block">{% include "partials/icon.html" with name="finger-print" %}Sign in with a passkey</button>
+    <p id="passkey-verification-status-message" class="passkey-status small" role="status"></p>
+    <div class="auth-divider"><span>or</span></div>
+  </template>
+
   <form method="post">
     {% csrf_token %}
     {% if form.non_field_errors %}<div class="form-error">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
@@ -15,4 +25,5 @@
     <button class="btn btn-primary btn-block" type="submit">Continue</button>
   </form>
 </div>
+{% render_otp_webauthn_auth_scripts username_field_selector="input[name='username']" %}
 {% endblock %}

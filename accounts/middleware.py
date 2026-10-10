@@ -1,3 +1,4 @@
+import functools
 import logging
 import time
 
@@ -107,6 +108,19 @@ class SessionTouchMiddleware:
         return self.get_response(request)
 
 
+@functools.cache
+def passkey_sign_in_paths() -> frozenset[str]:
+    """Passkey sign-in endpoints: used before sign-in (passkey only) and after a password (as the second factor)."""
+    return frozenset(
+        reverse(name)
+        for name in (
+            "otp_webauthn:credential-authentication-begin",
+            "otp_webauthn:credential-authentication-complete",
+            "otp_webauthn:js-i18n-catalog",
+        )
+    )
+
+
 class RequireTwoFactorMiddleware:
     """Every page requires a logged-in user who has also passed the second factor."""
 
@@ -115,7 +129,11 @@ class RequireTwoFactorMiddleware:
 
     def __call__(self, request):
         path = request.path_info
-        if path.startswith("/" + settings.STATIC_URL.lstrip("/")) or path == reverse("accounts:login"):
+        if (
+            path.startswith("/" + settings.STATIC_URL.lstrip("/"))
+            or path == reverse("accounts:login")
+            or path in passkey_sign_in_paths()
+        ):
             return self.get_response(request)
 
         user = request.user

@@ -6,14 +6,15 @@ import qrcode.image.svg
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView, PasswordChangeView
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django_otp import login as otp_login
 from django_otp import match_token
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
 from django_otp.plugins.otp_totp.models import TOTPDevice
+from django_otp_webauthn.models import WebAuthnCredential
 
 from .forms import TokenForm
 from .middleware import has_confirmed_totp
@@ -95,7 +96,13 @@ def verify(request):
         if response := _record_failure(request):
             return response
         form.add_error("token", "Invalid or expired code.")
-    return render(request, "accounts/verify.html", {"form": form})
+    context = {
+        "form": form,
+        "has_passkeys": WebAuthnCredential.objects.filter(user=user, confirmed=True).exists(),
+        # Where a passkey sends you afterwards (validated again by the passkey view).
+        "next_url": request.session.get(NEXT_KEY, ""),
+    }
+    return render(request, "accounts/verify.html", context)
 
 
 @require_http_methods(["GET", "POST"])
@@ -148,5 +155,14 @@ def security(request):
         "codes": codes,
         "remaining": StaticToken.objects.filter(device__user=request.user).count(),
         "totp_device": TOTPDevice.objects.filter(user=request.user, confirmed=True).first(),
+        "passkeys": WebAuthnCredential.objects.filter(user=request.user).order_by("created_at"),
     }
     return render(request, "accounts/security.html", context)
+
+
+@require_POST
+def passkey_delete(request, pk):
+    passkey = get_object_or_404(WebAuthnCredential, pk=pk, user=request.user)
+    passkey.delete()
+    messages.success(request, "Passkey removed. Also delete it from your password manager or device.")
+    return redirect(reverse("accounts:security") + "#passkeys")

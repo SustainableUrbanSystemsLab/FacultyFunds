@@ -29,6 +29,13 @@
     });
   });
 
+  // A passkey was just added on the Security page: reload so it shows in the list.
+  document.addEventListener("otp_webauthn.register_complete", function () {
+    window.setTimeout(function () {
+      window.location.reload();
+    }, 800);
+  });
+
   // "Select all" checkbox inside a bulk-edit form.
   document.addEventListener("change", function (event) {
     var toggle = event.target.closest("[data-select-all]");
