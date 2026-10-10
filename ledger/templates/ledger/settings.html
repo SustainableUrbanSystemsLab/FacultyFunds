@@ -3,6 +3,12 @@
 {% block content %}
 <div class="page-head"><h1>Settings</h1></div>
 
+<section class="card" id="security">
+  <h2>Account security</h2>
+  <p class="muted">Two-factor authentication, backup codes, and your password.</p>
+  <a class="btn" href="{% url 'accounts:security' %}">{% include "partials/icon.html" with name="shield-check" %}Open security settings</a>
+</section>
+
 <section class="card flush" id="rates">
   <h2 class="card-title">Fringe and tuition rates by fiscal year</h2>
   <div class="card-body small muted">
@@ -36,7 +42,7 @@
 </section>
 
 <section class="card flush" id="categories">
-  <h2 class="card-title">Budget categories</h2>
+  <h2 class="card-title">Categories</h2>
   <p class="card-body small muted">
     “Subject to F&amp;A” marks categories in the MTDC base that F&amp;A is charged on. Equipment, tuition remission, and participant support are normally excluded. Built-in categories can be renamed but not deleted.
   </p>

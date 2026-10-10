@@ -4,16 +4,39 @@
 <div class="page-head"><h1>{% if worktag %}Edit {{ worktag.code }}{% else %}Add fund{% endif %}</h1></div>
 <form method="post" class="stack">
   {% csrf_token %}
+  {% if form.non_field_errors %}<div class="form-error">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
   <section class="card">
     <h2>Fund</h2>
-    {% include "partials/form_fields.html" with form=form %}
+    <div class="form-grid">
+      {% include "partials/field.html" with field=form.type %}
+      {% include "partials/field.html" with field=form.code %}
+      {% include "partials/field.html" with field=form.name %}
+      {% if not worktag %}
+        {% include "partials/field.html" with field=form.amount %}
+        {% include "partials/field.html" with field=form.funding_date %}
+      {% endif %}
+      {% include "partials/field.html" with field=form.sponsor %}
+      {% include "partials/field.html" with field=form.start_date %}
+      {% include "partials/field.html" with field=form.end_date %}
+      {% include "partials/field.html" with field=form.fa_rate %}
+    </div>
+    {% if worktag %}<p class="small muted">Money added to this fund is managed under <a href="{{ worktag.get_absolute_url }}">Funding</a> on the fund page.</p>{% endif %}
   </section>
-  <section class="card">
-    <h2>Budget by category</h2>
-    <p class="muted">Total award or allocation per category. Leave blank for none. If the budget lists F&amp;A, enter it too.</p>
+  <details class="card" data-when="type=grant">
+    <summary>Split the award by category (optional)</summary>
+    <p class="muted">Enter the budget per category if the award has one. Leave blank for none. If the budget lists F&amp;A, enter it too.</p>
     {% include "partials/form_fields.html" with form=budget_form %}
     <p class="budget-total" data-sum-target>Total: <strong data-sum-output>—</strong></p>
-  </section>
+  </details>
+  <details class="card"{% if form.errors %} open{% endif %}>
+    <summary>More options</summary>
+    <div class="form-grid">
+      {% include "partials/field.html" with field=form.match_codes %}
+      {% include "partials/field.html" with field=form.fa_actuals %}
+      {% include "partials/field.html" with field=form.notes %}
+      {% include "partials/field.html" with field=form.is_active %}
+    </div>
+  </details>
   <div class="actions">
     <button class="btn btn-primary" type="submit">Save</button>
     <a class="btn btn-ghost" href="{% if worktag %}{{ worktag.get_absolute_url }}{% else %}{% url 'ledger:dashboard' %}{% endif %}">Cancel</a>

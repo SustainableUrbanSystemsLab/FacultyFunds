@@ -21,12 +21,11 @@ def short_money(value) -> str:
 
 def burn_chart(summary: FundSummary, today: dt.date | None = None, width: int = 760, height: int = 260) -> dict | None:
     """Cumulative spending vs. budget: actual line to this month, dashed projection to the end date."""
-    worktag = summary.worktag
     today = today or timezone.localdate()
     current = month_start(today)
     known = sorted(set(summary.monthly_actual) | set(summary.monthly_planned))
-    start = month_start(worktag.start_date) if worktag.start_date else (known[0] if known else current)
-    end = month_start(worktag.end_date) if worktag.end_date else max([add_months(current, 6), *known[-1:]])
+    start = month_start(summary.start_date) if summary.start_date else (known[0] if known else current)
+    end = month_start(summary.end_date) if summary.end_date else max([add_months(current, 6), *known[-1:]])
     if end <= start:
         end = add_months(start, 1)
     months = list(iter_months(start, end))

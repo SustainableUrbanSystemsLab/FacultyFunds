@@ -1,7 +1,9 @@
+from decimal import Decimal
 from pathlib import PurePath
 
 from django import forms
 from django.conf import settings
+from django.utils import timezone
 
 from .models import (
     IMPORT_SOURCE_CHOICES,
@@ -10,6 +12,7 @@ from .models import (
     Category,
     CategoryRule,
     FiscalYearRate,
+    Funding,
     PendingEntry,
     Person,
     PersonType,
@@ -26,19 +29,50 @@ MONEY_WIDGET = forms.NumberInput(attrs={"step": "0.01", "inputmode": "decimal"})
 
 
 class WorktagForm(forms.ModelForm):
+    """Add or edit a fund. Fields that only matter for one kind of fund are shown by data-when (see app.js)."""
+
+    amount = forms.DecimalField(
+        label="Amount",
+        required=False,
+        min_value=0,
+        max_digits=14,
+        decimal_places=2,
+        widget=MONEY_WIDGET,
+        help_text="The award, the gift, or this fiscal year's state allocation. More can be added later from the fund page.",
+    )
+    funding_date = forms.DateField(
+        label="Money available as of",
+        required=False,
+        widget=DATE_WIDGET,
+        help_text="State funds: use a date inside the fiscal year (July to June) the money is for.",
+    )
+
     class Meta:
         model = Worktag
         fields = [
             "type", "code", "name", "sponsor", "start_date", "end_date", "fa_rate", "fa_actuals",
-            "match_codes", "tracking_start", "notes", "is_active",
+            "match_codes", "notes", "is_active",
         ]
         widgets = {
             "start_date": DATE_WIDGET,
             "end_date": DATE_WIDGET,
-            "tracking_start": DATE_WIDGET,
             "match_codes": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
+        help_texts = {"end_date": "When the award ends. Runway and warnings count down to this date."}
+
+    GRANT_ONLY = ("sponsor", "start_date", "end_date", "fa_rate", "fa_actuals")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.creating = self.instance.pk is None
+        for name in self.GRANT_ONLY:
+            self.fields[name].widget.attrs["data-when"] = "type=grant"
+        if self.creating:
+            self.fields["funding_date"].initial = timezone.localdate
+        else:
+            # Money is managed on the fund page once the fund exists.
+            del self.fields["amount"], self.fields["funding_date"]
 
     def clean_code(self):
         return self.cleaned_data["code"].strip().upper()
@@ -59,6 +93,29 @@ class WorktagForm(forms.ModelForm):
                 self.add_error(field, f"{', '.join(sorted(clash))} already belongs to {other.code} ({other.name}).")
                 break
         return data
+
+    def save(self, commit=True):
+        worktag = super().save(commit=commit)
+        amount = self.cleaned_data.get("amount")
+        if commit and self.creating and amount:
+            Funding.objects.create(
+                worktag=worktag,
+                amount=amount,
+                date=self.cleaned_data.get("funding_date") or timezone.localdate(),
+                description="Initial funding",
+            )
+        return worktag
+
+
+class FundingForm(forms.ModelForm):
+    class Meta:
+        model = Funding
+        fields = ["date", "amount", "description"]
+        widgets = {"date": DATE_WIDGET, "amount": MONEY_WIDGET}
+        help_texts = {
+            "amount": "Use a negative amount for money taken back.",
+            "description": "For example: award, top-up, FY2027 allocation.",
+        }
 
 
 class BudgetForm(forms.Form):
@@ -123,14 +180,32 @@ class AppointmentForm(forms.ModelForm):
         model = Appointment
         fields = [
             "person", "worktag", "kind", "start_date", "end_date", "monthly_salary", "effort_pct",
-            "fringe_rate_override", "tuition_monthly_override", "notes",
+            "hourly_rate", "hours_per_week", "fringe_rate_override", "tuition_monthly_override", "notes",
         ]
         widgets = {
             "start_date": DATE_WIDGET,
             "end_date": DATE_WIDGET,
             "monthly_salary": MONEY_WIDGET,
+            "hourly_rate": MONEY_WIDGET,
             "tuition_monthly_override": MONEY_WIDGET,
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ("monthly_salary", "effort_pct"):
+            self.fields[name].widget.attrs["data-when"] = "kind=regular,summer"
+        for name in ("hourly_rate", "hours_per_week"):
+            self.fields[name].widget.attrs["data-when"] = "kind=hourly"
+
+    def clean(self):
+        data = super().clean()
+        kind = data.get("kind")
+        if kind == Appointment.Kind.HOURLY:
+            data["effort_pct"] = Decimal("100")
+            data["monthly_salary"] = Decimal("0")
+        elif kind and data.get("monthly_salary") is None:
+            self.add_error("monthly_salary", "Enter the monthly salary.")
+        return data
 
 
 class CategoryForm(forms.ModelForm):

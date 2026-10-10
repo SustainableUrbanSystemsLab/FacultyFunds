@@ -4,26 +4,22 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
+
+from .fiscal import fiscal_year, fiscal_year_bounds
 
 ZERO = Decimal("0")
+WEEKS_PER_MONTH = Decimal("52") / 12
 
 
 class WorktagType(models.TextChoices):
-    GRANT = "grant", "Grant"
-    GIFT = "gift", "Gift"
-    COST_CENTER = "cost_center", "Cost Center"
-    PROJECT = "project", "Project"
-    PROGRAM = "program", "Program"
+    GRANT = "grant", "Federal grant"
+    GIFT = "gift", "Foundation / gift"
+    STATE = "state", "State funds"
 
 
 # When one transaction carries several tracked worktags, the most specific fund wins.
-WORKTAG_PRIORITY = [
-    WorktagType.GRANT,
-    WorktagType.GIFT,
-    WorktagType.PROJECT,
-    WorktagType.PROGRAM,
-    WorktagType.COST_CENTER,
-]
+WORKTAG_PRIORITY = [WorktagType.GRANT, WorktagType.GIFT, WorktagType.STATE]
 
 
 class Source(models.TextChoices):
@@ -37,7 +33,7 @@ IMPORT_SOURCE_CHOICES = [choice for choice in Source.choices if choice[0] != Sou
 
 
 class Worktag(models.Model):
-    """A fund you track: grant, gift, cost center, project, or program."""
+    """A fund you track: a federal grant, a foundation or gift fund, or state funds."""
 
     class FAActuals(models.TextChoices):
         CALCULATE = "calculate", "Calculate from rate"
@@ -56,11 +52,6 @@ class Worktag(models.Model):
     sponsor = models.CharField(max_length=200, blank=True)
     start_date = models.DateField(null=True, blank=True)
     end_date = models.DateField(null=True, blank=True)
-    tracking_start = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Optional. Planned payroll before this date is ignored (use with one opening transaction for earlier spending).",
-    )
     fa_rate = models.DecimalField(
         "F&A rate (%)",
         max_digits=6,
@@ -94,6 +85,37 @@ class Worktag(models.Model):
     @property
     def priority(self) -> int:
         return WORKTAG_PRIORITY.index(self.type)
+
+    @property
+    def lapses_yearly(self) -> bool:
+        """State money expires on June 30; it is tracked one fiscal year at a time."""
+        return self.type == WorktagType.STATE
+
+    def period(self, today) -> tuple:
+        """(first day, last day) of the fiscal year being tracked, or (None, None) for funds that don't lapse."""
+        if not self.lapses_yearly:
+            return None, None
+        return fiscal_year_bounds(fiscal_year(today))
+
+
+class Funding(models.Model):
+    """Money added to a fund: the award, a transfer or top-up, or a state fund's allocation for a fiscal year."""
+
+    worktag = models.ForeignKey(Worktag, related_name="funding", on_delete=models.CASCADE, verbose_name="fund")
+    date = models.DateField(default=timezone.localdate)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    description = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        verbose_name_plural = "funding"
+
+    def __str__(self):
+        return f"{self.worktag.code} +{self.amount} ({self.date})"
+
+    @property
+    def fiscal_year(self) -> int:
+        return fiscal_year(self.date)
 
 
 class Category(models.Model):
@@ -213,8 +235,9 @@ class Appointment(models.Model):
     """Planned payroll on a fund, used for projections."""
 
     class Kind(models.TextChoices):
-        REGULAR = "regular", "Regular / academic year"
+        REGULAR = "regular", "Monthly salary"
         SUMMER = "summer", "Summer salary"
+        HOURLY = "hourly", "Hourly (student worker)"
 
     person = models.ForeignKey(Person, related_name="appointments", on_delete=models.CASCADE)
     worktag = models.ForeignKey(Worktag, related_name="appointments", on_delete=models.CASCADE, verbose_name="fund")
@@ -224,8 +247,26 @@ class Appointment(models.Model):
     monthly_salary = models.DecimalField(
         max_digits=12,
         decimal_places=2,
+        default=ZERO,
+        blank=True,
         validators=[MinValueValidator(ZERO)],
         help_text="Full monthly salary at 100% effort.",
+    )
+    hourly_rate = models.DecimalField(
+        "Hourly rate",
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(ZERO)],
+    )
+    hours_per_week = models.DecimalField(
+        "Hours per week",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(ZERO), MaxValueValidator(Decimal("168"))],
     )
     effort_pct = models.DecimalField(
         "Effort on this fund (%)",
@@ -261,9 +302,24 @@ class Appointment(models.Model):
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:
             raise ValidationError({"end_date": "End date must be on or after the start date."})
+        if self.kind == self.Kind.HOURLY:
+            errors = {}
+            if self.hourly_rate is None:
+                errors["hourly_rate"] = "Enter the hourly rate."
+            if self.hours_per_week is None:
+                errors["hours_per_week"] = "Enter the hours per week."
+            if errors:
+                raise ValidationError(errors)
+
+    @property
+    def is_hourly(self) -> bool:
+        return self.kind == self.Kind.HOURLY
 
     @property
     def monthly_charge(self) -> Decimal:
+        """Salary charged to the fund each month (hourly work is rate x hours x 52 weeks / 12 months)."""
+        if self.is_hourly:
+            return (self.hourly_rate or ZERO) * (self.hours_per_week or ZERO) * WEEKS_PER_MONTH
         return self.monthly_salary * self.effort_pct / 100
 
 

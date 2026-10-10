@@ -7,23 +7,18 @@ from ..models import WorktagType
 CODE_PATTERN = re.compile(r"(?<![A-Z0-9])([A-Z]{2,4}\d{4,10})(?![A-Z0-9])")
 # Worktag-like IDs that are never a fund you track (fund, class, function, spend category, documents).
 IGNORED_CODE_PREFIXES = {"FD", "CL", "FN", "SC", "EXP", "PO", "REQ", "INV", "JE", "SI", "PR"}
+# Project and program worktags can belong to any kind of fund, so they are left for you to choose.
 PREFIX_TYPES = {
     "AWD": WorktagType.GRANT,
     "GR": WorktagType.GRANT,
     "GF": WorktagType.GIFT,
-    "CC": WorktagType.COST_CENTER,
-    "PJ": WorktagType.PROJECT,
-    "PRJ": WorktagType.PROJECT,
-    "PG": WorktagType.PROGRAM,
-    "PRG": WorktagType.PROGRAM,
+    "CC": WorktagType.STATE,
 }
 LABEL_TYPES = [
-    ("cost center", WorktagType.COST_CENTER),
+    ("cost center", WorktagType.STATE),
     ("grant", WorktagType.GRANT),
     ("award", WorktagType.GRANT),
     ("gift", WorktagType.GIFT),
-    ("project", WorktagType.PROJECT),
-    ("program", WorktagType.PROGRAM),
 ]
 
 

@@ -70,6 +70,27 @@
     describeTheme(button, next);
   });
 
+  // Show a field (or a whole section) only for certain values of another field in the same form:
+  //   data-when="type=grant"   data-when="kind=regular,summer"
+  var conditional = Array.prototype.slice.call(document.querySelectorAll("[data-when]"));
+  if (conditional.length) {
+    var applyConditions = function () {
+      conditional.forEach(function (element) {
+        var form = element.closest("form");
+        if (!form) return;
+        var parts = element.getAttribute("data-when").split("=");
+        var control = form.elements[parts[0]];
+        var current = control ? String(control.value || "") : "";
+        var visible = parts[1].split(",").indexOf(current) !== -1;
+        var isInput = /^(INPUT|SELECT|TEXTAREA)$/.test(element.tagName);
+        var target = isInput ? element.closest(".field") || element : element;
+        target.hidden = !visible;
+      });
+    };
+    document.addEventListener("change", applyConditions);
+    applyConditions();
+  }
+
   // Running total on the fund budget form.
   var output = document.querySelector("[data-sum-output]");
   if (output) {

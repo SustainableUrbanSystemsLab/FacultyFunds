@@ -6,6 +6,7 @@
   <h1>Pending</h1>
   <div class="actions"><a class="btn btn-primary" href="{% url 'ledger:pending_create' %}">Add pending entry</a></div>
 </div>
+{% include "ledger/partials/tx_tabs.html" with tab="pending" %}
 <p class="muted">Spending you expect but that isn't in a report yet (orders, planned travel, invoices). It counts against the fund until you reconcile it with the real transaction.</p>
 
 <form method="get" class="filters card">

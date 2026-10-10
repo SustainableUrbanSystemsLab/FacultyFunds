@@ -1,14 +1,15 @@
 {% extends "base.html" %}
 {% load ledger_tags %}
-{% block title %}Review{% endblock %}
+{% block title %}Needs review{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Review</h1>
+  <h1>Needs review</h1>
   <form method="post" action="{% url 'ledger:review_rematch' %}">
     {% csrf_token %}
     <button class="btn" type="submit">Re-run matching</button>
   </form>
 </div>
+{% include "ledger/partials/tx_tabs.html" with tab="review" %}
 <p class="muted">Imported rows land here when no tracked fund or category rule matched. Add the fund or a rule, then re-run matching, or assign rows by hand.</p>
 
 {% if suggestions %}

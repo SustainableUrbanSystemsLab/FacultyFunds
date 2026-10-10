@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{% if entry %}Edit funding{% else %}Add funding{% endif %}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{% if entry %}Edit funding{% else %}Add funding{% endif %}</h1>
+    <p class="muted">{{ worktag }}</p>
+  </div>
+</div>
+<section class="card">
+  {% if worktag.lapses_yearly %}
+    <p class="muted">State money expires on June 30. Enter each year's allocation with a date inside that fiscal year (July to June). Unspent money does not carry over.</p>
+  {% else %}
+    <p class="muted">Money added to this fund: the award, a transfer, or a top-up. Everything entered here adds up to the fund's total.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% include "partials/form_fields.html" %}
+    <div class="actions">
+      <button class="btn btn-primary" type="submit">Save</button>
+      <a class="btn btn-ghost" href="{{ next }}">Cancel</a>
+      {% if entry %}<a class="btn btn-danger push-right" href="{% url 'ledger:funding_delete' entry.pk %}?next={{ next|urlencode }}">Delete</a>{% endif %}
+    </div>
+  </form>
+</section>
+{% endblock %}

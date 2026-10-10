@@ -1,3 +1,5 @@
+import time
+
 from django.conf import settings
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponse
@@ -37,6 +39,27 @@ class HealthCheckMiddleware:
     def __call__(self, request):
         if request.path == "/healthz":
             return HttpResponse("ok", content_type="text/plain")
+        return self.get_response(request)
+
+
+class SessionTouchMiddleware:
+    """Sliding idle timeout without a database write on every request.
+
+    Saving the session pushes its expiry back. Doing that on every click makes each page wait on a
+    database commit, so only touch it when it hasn't been saved for a few minutes. The idle timeout
+    stays accurate to within that interval.
+    """
+
+    INTERVAL_SECONDS = 300
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.user.is_authenticated:
+            now = int(time.time())
+            if now - request.session.get("_touched", 0) >= self.INTERVAL_SECONDS:
+                request.session["_touched"] = now
         return self.get_response(request)
 
 
