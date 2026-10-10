@@ -25,4 +25,4 @@ ENV APP_VERSION=$APP_VERSION APP_COMMIT=$APP_COMMIT
 USER app
 
 EXPOSE 8000
-CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --worker-class gthread --threads ${GUNICORN_THREADS:-4} --access-logfile - --access-logformat '%({x-forwarded-for}i)s \"%(r)s\" %(s)s %(b)s %(L)ss'"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${WEB_CONCURRENCY:-2} --preload --worker-class gthread --threads ${GUNICORN_THREADS:-4} --access-logfile - --access-logformat '%({x-forwarded-for}i)s \"%(r)s\" %(s)s %(b)s %(L)ss'"]
