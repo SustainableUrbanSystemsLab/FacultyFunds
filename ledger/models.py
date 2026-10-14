@@ -44,6 +44,10 @@ class Worktag(models.Model):
         "Worktag ID", max_length=64, unique=True, null=True, blank=True,
         help_text="Optional until Workday assigns one. Add it later by editing the fund.",
     )
+    cost_center = models.CharField(
+        "Cost Center", max_length=64, blank=True,
+        help_text="Optional Workday cost center for this fund. More than one fund may share it.",
+    )
     name = models.CharField(max_length=200)
     match_codes = models.TextField(
         "Other IDs for this fund",

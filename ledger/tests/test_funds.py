@@ -25,7 +25,7 @@ from ledger.models import (
     WorktagType,
 )
 from ledger.services.projections import summarize_fund
-from ledger.services.rules import describe_code
+from ledger.services.rules import WorktagMatcher, describe_code
 
 PASSWORD = "correct horse battery staple"
 
@@ -260,6 +260,15 @@ class WorktagFormTests(TestCase):
         self.assertEqual(first_fund.code, "GF00012345")
         self.assertEqual(second_fund.display_code, "Second award")
 
+    def test_cost_center_can_be_shared_without_becoming_a_matching_id(self):
+        first = WorktagForm(self.data(code="", name="First award", cost_center=" cc0001234 "))
+        second = WorktagForm(self.data(code="", name="Second award", cost_center="CC0001234"))
+        self.assertTrue(first.is_valid(), first.errors)
+        self.assertTrue(second.is_valid(), second.errors)
+        funds = [first.save(), second.save()]
+        self.assertEqual([fund.cost_center for fund in funds], ["CC0001234", "CC0001234"])
+        self.assertEqual(WorktagMatcher(funds).match("Cost Center: CC0001234")[0], None)
+
     def test_state_expiration_is_editable_and_shown_only_for_grants_and_state(self):
         form = WorktagForm(self.data(type="state", code="CCNEW", end_date="2027-03-31"))
         self.assertTrue(form.is_valid(), form.errors)
@@ -355,6 +364,12 @@ class FundPagesTests(TestCase):
         self.assertContains(self.client.get(fund.get_absolute_url()), "Awaiting Workday")
         self.assertContains(self.client.get(reverse("ledger:dashboard")), "Worktag pending")
         self.assertContains(self.client.get(reverse("ledger:fund_edit", args=[fund.pk])), "Optional until Workday assigns one")
+
+    def test_fund_detail_shows_cost_center(self):
+        self.grant.cost_center = "CC0001234"
+        self.grant.save()
+        self.assertContains(self.client.get(self.grant.get_absolute_url()), "Cost Center: CC0001234")
+        self.assertContains(self.client.get(reverse("ledger:fund_export", args=[self.grant.pk])), "Cost Center,CC0001234")
 
     def test_category_budgets_are_dropped_when_a_fund_is_not_a_grant(self):
         BudgetLine.objects.create(worktag=self.gift, category=Category.objects.get(code="travel"), amount=Decimal("500"))

@@ -30,9 +30,9 @@ class FundingInline(admin.TabularInline):
 
 @admin.register(Worktag)
 class WorktagAdmin(admin.ModelAdmin):
-    list_display = ["code", "name", "type", "start_date", "end_date", "fa_rate", "is_active"]
+    list_display = ["code", "name", "type", "cost_center", "start_date", "end_date", "fa_rate", "is_active"]
     list_filter = ["type", "is_active"]
-    search_fields = ["code", "name", "match_codes"]
+    search_fields = ["code", "name", "cost_center", "match_codes"]
     inlines = [FundingInline, BudgetLineInline]
 
 

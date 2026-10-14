@@ -6,6 +6,7 @@
   <div>
     <p class="eyebrow">{{ worktag.get_type_display }}{% if summary.period_label %} · {{ summary.period_label }}{% endif %}{% if not worktag.is_active %} · inactive{% endif %}</p>
     <h1>{{ worktag.display_code }}{% if worktag.code %} <span class="h-sub">{{ worktag.name }}</span>{% endif %}</h1>
+    {% if worktag.cost_center %}<p class="muted">Cost Center: {{ worktag.cost_center }}</p>{% endif %}
     <p class="muted">
       {% if worktag.sponsor %}{{ worktag.sponsor }} · {% endif %}
       {% if worktag.lapses_yearly %}Unspent money lapses {{ summary.end_date|date:"M j, Y" }}{% else %}{% if worktag.start_date %}{{ worktag.start_date|date:"M j, Y" }}{% endif %}{% if worktag.end_date %} – {{ worktag.end_date|date:"M j, Y" }}{% endif %}{% endif %}

@@ -10,6 +10,7 @@
     <div class="form-grid">
       {% include "partials/field.html" with field=form.type %}
       {% include "partials/field.html" with field=form.code %}
+      {% include "partials/field.html" with field=form.cost_center %}
       {% include "partials/field.html" with field=form.name %}
       {% if not worktag %}
         {% include "partials/field.html" with field=form.amount %}

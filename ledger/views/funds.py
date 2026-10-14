@@ -166,6 +166,7 @@ def fund_export(request, pk):
     response["Content-Disposition"] = f'attachment; filename="{slugify(worktag.code or worktag.name) or "fund"}-{today}.csv"'
     writer = csv.writer(response)
     writer.writerow(map(csv_safe, ["Fund", worktag.code, worktag.name]))
+    writer.writerow(["Cost Center", csv_safe(worktag.cost_center)])
     writer.writerow(["Start", summary.start_date or "", "End", summary.end_date or "", "F&A rate %", worktag.fa_rate])
     for entry in worktag.funding.order_by("date", "id"):
         writer.writerow(["Funding", entry.date, entry.amount, csv_safe(entry.description)])

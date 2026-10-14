@@ -50,7 +50,7 @@ class WorktagForm(forms.ModelForm):
     class Meta:
         model = Worktag
         fields = [
-            "type", "code", "name", "sponsor", "start_date", "end_date", "fa_rate", "fa_actuals",
+            "type", "code", "cost_center", "name", "sponsor", "start_date", "end_date", "fa_rate", "fa_actuals",
             "match_codes", "notes", "is_active",
         ]
         widgets = {
@@ -78,6 +78,9 @@ class WorktagForm(forms.ModelForm):
 
     def clean_code(self):
         return (self.cleaned_data["code"] or "").strip().upper() or None
+
+    def clean_cost_center(self):
+        return self.cleaned_data["cost_center"].strip().upper()
 
     def clean(self):
         data = super().clean()
