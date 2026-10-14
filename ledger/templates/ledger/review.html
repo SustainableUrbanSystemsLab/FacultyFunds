@@ -68,7 +68,7 @@
         <tr>
           <td class="check"><input type="checkbox" name="ids" value="{{ t.pk }}" aria-label="Select"></td>
           <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
-          <td><a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.code }}</a></td>
+          <td><a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.display_code }}</a></td>
           <td>{{ t.description|default:"—"|truncatechars:70 }}</td>
           <td>{{ t.raw_category|default:"—" }}</td>
           <td class="num nowrap {{ t.amount|neg_class }}">{{ t.amount|money_cents }}</td>

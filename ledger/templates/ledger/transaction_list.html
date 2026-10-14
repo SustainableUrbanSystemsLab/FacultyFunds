@@ -13,7 +13,7 @@
   <select name="fund" aria-label="Fund">
     <option value="">All funds</option>
     <option value="none"{% if params.fund == "none" %} selected{% endif %}>No fund</option>
-    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.code }}</option>{% endfor %}
+    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.display_code }}</option>{% endfor %}
   </select>
   <select name="category" aria-label="Category">
     <option value="">All categories</option>
@@ -44,7 +44,7 @@
         <tr>
           <td class="check"><input type="checkbox" name="ids" value="{{ t.pk }}" aria-label="Select"></td>
           <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
-          <td>{% if t.worktag %}<a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.code }}</a>{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>
+          <td>{% if t.worktag %}<a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.display_code }}</a>{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>
           <td>{{ t.description|default:t.raw_category|default:"—"|truncatechars:80 }}{% if t.reference %}<div class="sub">{{ t.reference|truncatechars:50 }}</div>{% endif %}</td>
           <td>{% if t.category %}{{ t.category.name }}{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>
           <td>{% if t.person %}<a href="{% url 'ledger:person_detail' t.person_id %}">{{ t.person.alias }}</a>{% endif %}</td>

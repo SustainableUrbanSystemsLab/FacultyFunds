@@ -73,7 +73,7 @@
           <td>{% if r.duplicate %}<span class="badge">duplicate</span>{% elif r.stale_existing %}<span class="badge badge-danger" title="Imported earlier; now {{ r.raw_status }}. The earlier transaction is removed.">removes earlier import</span>{% elif r.skip_reason %}<span class="badge badge-warn">{{ r.skip_reason }}</span>{% else %}<span class="badge badge-ok">import</span>{% endif %}</td>
           <td class="nowrap">{{ r.date|date:"Y-m-d"|default:"—" }}</td>
           <td class="num nowrap {{ r.amount|neg_class }}">{{ r.amount|money_cents }}{% if r.kind == 'fringe' %}<div class="sub">fringe</div>{% endif %}</td>
-          <td>{% if r.worktag %}{{ r.worktag.code }}{% else %}<span class="badge badge-warn" title="{{ r.worktag_note }}">none</span>{% endif %}</td>
+          <td>{% if r.worktag %}{{ r.worktag.display_code }}{% else %}<span class="badge badge-warn" title="{{ r.worktag_note }}">none</span>{% endif %}</td>
           <td>{% if r.category %}{{ r.category.name }}{% else %}<span class="badge badge-warn">none</span>{% endif %}{% if r.raw_category %}<div class="sub">{{ r.raw_category|truncatechars:30 }}</div>{% endif %}</td>
           <td>{{ r.person_label|default:"" }}</td>
           <td>{{ r.description|truncatechars:70 }}</td>

@@ -44,7 +44,7 @@ class WorktagForm(forms.ModelForm):
         label="Money available as of",
         required=False,
         widget=DATE_WIDGET,
-        help_text="State funds: use a date inside the fiscal year (July to June) the money is for.",
+        help_text="State funds: use a date inside the fiscal year (July to June) the money is for, before its expiration date.",
     )
 
     class Meta:
@@ -59,15 +59,17 @@ class WorktagForm(forms.ModelForm):
             "match_codes": forms.Textarea(attrs={"rows": 3}),
             "notes": forms.Textarea(attrs={"rows": 3}),
         }
-        help_texts = {"end_date": "When the award ends. Runway and warnings count down to this date."}
+        help_texts = {"end_date": "Grant: when the award ends. State funds: optional expiration date; unspent money otherwise lapses June 30."}
 
-    GRANT_ONLY = ("sponsor", "start_date", "end_date", "fa_rate", "fa_actuals")
+    GRANT_ONLY = ("sponsor", "start_date", "fa_rate", "fa_actuals")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.creating = self.instance.pk is None
+        self.fields["end_date"].label = "End / expiration date"
         for name in self.GRANT_ONLY:
             self.fields[name].widget.attrs["data-when"] = "type=grant"
+        self.fields["end_date"].widget.attrs["data-when"] = "type=grant,state"
         if self.creating:
             self.fields["funding_date"].initial = timezone.localdate
         else:
@@ -75,13 +77,16 @@ class WorktagForm(forms.ModelForm):
             del self.fields["amount"], self.fields["funding_date"]
 
     def clean_code(self):
-        return self.cleaned_data["code"].strip().upper()
+        return (self.cleaned_data["code"] or "").strip().upper() or None
 
     def clean(self):
         data = super().clean()
         start, end = data.get("start_date"), data.get("end_date")
-        if start and end and end < start:
+        if data.get("type") == "grant" and start and end and end < start:
             self.add_error("end_date", "End date must be on or after the start date.")
+        if (data.get("type") == "state" and end and data.get("amount")
+                and data.get("funding_date") and data["funding_date"] > end):
+            self.add_error("funding_date", "The allocation date must be on or before the expiration date.")
         # Every ID must point at exactly one fund, or imported rows become ambiguous.
         mine = {line.strip().upper() for line in [data.get("code") or "", *(data.get("match_codes") or "").splitlines()]}
         mine.discard("")
@@ -90,7 +95,7 @@ class WorktagForm(forms.ModelForm):
             clash = mine & {code.upper() for code in other.all_codes}
             if clash:
                 field = "code" if (data.get("code") or "").upper() in clash else "match_codes"
-                self.add_error(field, f"{', '.join(sorted(clash))} already belongs to {other.code} ({other.name}).")
+                self.add_error(field, f"{', '.join(sorted(clash))} already belongs to {other.code or other.name}.")
                 break
         return data
 

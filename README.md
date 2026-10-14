@@ -42,7 +42,7 @@ A private web app for faculty who don't have direct access to their own balances
 |---|---|---|---|
 | 🏛️ **Federal grant** | NSF, DOE, and other federal agencies | Award amount, optional budget per category, F&A rate | On the award's end date |
 | 🎁 **Foundation / gift** | Fellowships, gifts, endowment income | The award, then top-ups as they arrive | Never |
-| 🗓️ **State funds** | Departmental money | A new allocation each fiscal year | **June 30** (unspent money lapses; the app shows only the current year and warns when you're on pace to leave money behind) |
+| 🗓️ **State funds** | Departmental money | A new allocation each fiscal year | **June 30**, or an earlier expiration date you choose (unspent money lapses; the app tracks each fiscal year and warns when money may be left behind) |
 
 ## 🚀 Quick start
 
@@ -72,7 +72,7 @@ This adds one fund of each kind and an appointment, and writes sample Workday an
 
 ## 🧭 Typical workflow
 
-1. 🏦 **Add your funds.** Go to Funds → Add fund. Choose the kind, then enter the worktag ID exactly as Workday shows it (e.g. `GR00012345`), a name, and the amount. For a grant, also set the end date and F&A rate, and optionally split the award by category. Under *More options*, add the award ID (`AWD…`) or OneUSG project code so payroll rows match too. Later, use **Add funding** on the fund page for a top-up or, for state money, each new fiscal year's allocation.
+1. 🏦 **Add your funds.** Go to Funds → Add fund. Choose the kind, then enter a name and amount. Add the worktag ID exactly as Workday shows it (e.g. `GR00012345`) if you know it; otherwise leave it blank and add it later by editing the fund. For a grant, also set the end date and F&A rate, and optionally split the award by category. For state funds, you can set an expiration date. Under *More options*, add the award ID (`AWD…`) or OneUSG project code so payroll rows match too. Later, use **Add funding** on the fund page for a top-up or, for state money, each new fiscal year's allocation.
 2. 📐 **Set rates.** Under Settings → Fringe and tuition rates by fiscal year, enter each year's fringe rate and monthly tuition remission for each person type. Fiscal years run July–June, so FY2027 is July 2026 to June 2027. A year left blank reuses the closest earlier year. The defaults are Georgia Tech's FY2025 values.
 3. 📥 **Import reports.** Go to Import, choose the file type, and upload. Check the preview, then confirm.
 4. 🔎 **Needs review.** Rows with no matching fund or category rule land under Transactions → Needs review. Add the fund or a keyword rule and click *Re-run matching*, or assign rows in bulk.
@@ -101,7 +101,7 @@ This adds one fund of each kind and an appointment, and writes sample Workday an
 | Piece | Rule |
 |---|---|
 | Actuals | Imported and manual transactions. Uncategorized amounts count as "Other" until you fix them. |
-| Funding | A fund's budget is the sum of its funding entries. State funds count only the current fiscal year's allocation and spending, since unspent money lapses on June 30. |
+| Funding | A fund's budget is the sum of its funding entries. State funds count only the current fiscal year's allocation and spending through June 30 or an earlier chosen expiration date. After expiration, the last fiscal year remains visible. |
 | Rates | Fringe and tuition come from the person type's rate for the fiscal year (July–June) each month falls in. A missing year reuses the closest earlier year and shows an alert. |
 | Fringe on actuals | Payroll salary with no fringe line for that person and month gets fringe estimated at that month's fiscal-year rate. |
 | Planned payroll | Each appointment month *without* a salary actual for that person on that fund: salary × effort (prorated for partial months), plus fringe. |

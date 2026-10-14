@@ -41,7 +41,8 @@ class Worktag(models.Model):
 
     type = models.CharField(max_length=20, choices=WorktagType.choices, default=WorktagType.GRANT)
     code = models.CharField(
-        "Worktag ID", max_length=64, unique=True, help_text="Exactly as shown in Workday, e.g. GR00012345."
+        "Worktag ID", max_length=64, unique=True, null=True, blank=True,
+        help_text="Optional until Workday assigns one. Add it later by editing the fund.",
     )
     name = models.CharField(max_length=200)
     match_codes = models.TextField(
@@ -72,7 +73,11 @@ class Worktag(models.Model):
         verbose_name = "fund"
 
     def __str__(self):
-        return f"{self.code} · {self.name}"
+        return f"{self.code} · {self.name}" if self.code else self.name
+
+    @property
+    def display_code(self):
+        return self.code or self.name
 
     def get_absolute_url(self):
         return reverse("ledger:fund_detail", args=[self.pk])
@@ -92,10 +97,12 @@ class Worktag(models.Model):
         return self.type == WorktagType.STATE
 
     def period(self, today) -> tuple:
-        """(first day, last day) of the fiscal year being tracked, or (None, None) for funds that don't lapse."""
+        """Current state fiscal year, capped at a chosen expiration date; retain the final year after expiry."""
         if not self.lapses_yearly:
             return None, None
-        return fiscal_year_bounds(fiscal_year(today))
+        tracked_day = min(today, self.end_date) if self.end_date else today
+        start, end = fiscal_year_bounds(fiscal_year(tracked_day))
+        return start, min(end, self.end_date) if self.end_date else end
 
 
 class Funding(models.Model):
@@ -111,7 +118,7 @@ class Funding(models.Model):
         verbose_name_plural = "funding"
 
     def __str__(self):
-        return f"{self.worktag.code} +{self.amount} ({self.date})"
+        return f"{self.worktag.display_code} +{self.amount} ({self.date})"
 
     @property
     def fiscal_year(self) -> int:
@@ -161,7 +168,7 @@ class BudgetLine(models.Model):
         constraints = [models.UniqueConstraint(fields=["worktag", "category"], name="one_budget_line_per_category")]
 
     def __str__(self):
-        return f"{self.worktag.code} {self.category}: {self.amount}"
+        return f"{self.worktag.display_code} {self.category}: {self.amount}"
 
 
 class PersonType(models.Model):
@@ -297,7 +304,7 @@ class Appointment(models.Model):
         ordering = ["start_date", "id"]
 
     def __str__(self):
-        return f"{self.person} on {self.worktag.code} ({self.start_date:%b %Y}–{self.end_date:%b %Y})"
+        return f"{self.person} on {self.worktag.display_code} ({self.start_date:%b %Y}–{self.end_date:%b %Y})"
 
     def clean(self):
         if self.start_date and self.end_date and self.end_date < self.start_date:

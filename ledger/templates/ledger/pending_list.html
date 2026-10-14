@@ -16,7 +16,7 @@
   </select>
   <select name="fund" aria-label="Fund">
     <option value="">All funds</option>
-    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.code }}</option>{% endfor %}
+    {% for f in funds %}<option value="{{ f.pk }}"{% if params.fund == f.pk|stringformat:"s" %} selected{% endif %}>{{ f.display_code }}</option>{% endfor %}
   </select>
   <button class="btn" type="submit">Filter</button>
 </form>
@@ -29,7 +29,7 @@
       {% for e in entries %}
         <tr>
           <td>{{ e.description }}{% if e.person %}<div class="sub">{{ e.person.alias }}</div>{% endif %}</td>
-          <td><a href="{% url 'ledger:fund_detail' e.worktag_id %}">{{ e.worktag.code }}</a></td>
+          <td><a href="{% url 'ledger:fund_detail' e.worktag_id %}">{{ e.worktag.display_code }}</a></td>
           <td>{{ e.category.name }}</td>
           <td class="nowrap">{{ e.expected_date|date:"Y-m-d"|default:"—" }}{% if e.status == "pending" and e.expected_date and e.expected_date < today %} <span class="badge badge-warn">past</span>{% endif %}</td>
           <td>{{ e.get_status_display }}{% if e.reconciled_with %}<div class="sub"><a href="{% url 'ledger:transaction_edit' e.reconciled_with_id %}">{{ e.reconciled_with.date|date:"Y-m-d" }} · {{ e.reconciled_with.amount|money_cents }}</a></div>{% endif %}</td>

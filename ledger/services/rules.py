@@ -70,7 +70,7 @@ class WorktagMatcher:
         top = min(worktag.priority for worktag in found.values())
         best = [worktag for worktag in found.values() if worktag.priority == top]
         if len(best) > 1:
-            return None, "several tracked funds: " + ", ".join(sorted(w.code for w in best))
+            return None, "several tracked funds: " + ", ".join(sorted(w.code or w.name for w in best))
         return best[0], ""
 
     def unknown_codes(self, text: str) -> set[str]:

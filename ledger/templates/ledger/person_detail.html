@@ -44,7 +44,7 @@
       <tbody>
       {% for a in appointments %}
         <tr>
-          <td><a href="{% url 'ledger:fund_detail' a.worktag_id %}">{{ a.worktag.code }}</a></td>
+          <td><a href="{% url 'ledger:fund_detail' a.worktag_id %}">{{ a.worktag.display_code }}</a></td>
           <td>{{ a.get_kind_display }}</td>
           <td class="nowrap">{{ a.start_date|date:"M j, Y" }} – {{ a.end_date|date:"M j, Y" }}</td>
           <td class="num">{% if a.is_hourly %}{{ a.hourly_rate|money_cents }}/h × {{ a.hours_per_week|trim_decimal }} h/wk{% else %}{{ a.monthly_salary|money }}/mo{% endif %}</td>

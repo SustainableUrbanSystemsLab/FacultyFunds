@@ -10,7 +10,7 @@
     {% for t in transactions %}
       <tr>
         <td class="nowrap">{{ t.date|date:"Y-m-d" }}</td>
-        {% if show_fund %}<td>{% if t.worktag %}<a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.code }}</a>{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>{% endif %}
+        {% if show_fund %}<td>{% if t.worktag %}<a href="{% url 'ledger:fund_detail' t.worktag_id %}">{{ t.worktag.display_code }}</a>{% else %}<span class="badge badge-warn">none</span>{% endif %}</td>{% endif %}
         <td>{{ t.description|default:t.raw_category|default:"—"|truncatechars:90 }}{% if t.reference %}<div class="sub">{{ t.reference|truncatechars:60 }}</div>{% endif %}</td>
         <td>{% if t.category %}{{ t.category.name }}{% else %}<span class="badge badge-warn">none</span>{% endif %}{% if t.raw_category and t.raw_category != t.description %}<div class="sub">{{ t.raw_category|truncatechars:40 }}</div>{% endif %}</td>
         <td>{% if t.person %}<a href="{% url 'ledger:person_detail' t.person_id %}">{{ t.person.alias }}</a>{% endif %}</td>

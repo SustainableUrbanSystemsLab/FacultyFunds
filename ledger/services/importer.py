@@ -291,7 +291,7 @@ def _summarize(batch: ImportBatch, records: list[ParsedRow], unknown_codes: dict
     known = set(PersonKey.objects.filter(key_hash__in=key_list).values_list("key_hash", flat=True))
     by_fund = Counter()
     for record in importable:
-        by_fund[record.worktag.code if record.worktag else ""] += record.amount
+        by_fund[record.worktag.display_code if record.worktag else ""] += record.amount
     return {
         "rows": len(records),
         "importable": len(importable),

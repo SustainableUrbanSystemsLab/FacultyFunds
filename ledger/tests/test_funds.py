@@ -78,6 +78,24 @@ class FundKindTests(TestCase):
         self.assertEqual(s.total.actual, Decimal("3000.00"))
         self.assertEqual(s.total.remaining, Decimal("12000.00"))
 
+    def test_state_expiration_caps_spending_and_payroll_and_keeps_final_year_visible(self):
+        expiry = dt.date(2027, 3, 31)
+        fund = Worktag.objects.create(code="CCEXP", name="Expiring allocation", type=WorktagType.STATE,
+                                      end_date=expiry)
+        Funding.objects.create(worktag=fund, date=dt.date(2026, 8, 1), amount=Decimal("5000"))
+        self.spend(fund, "supplies", dt.date(2027, 3, 20), "250")
+        self.spend(fund, "supplies", dt.date(2027, 4, 2), "999")
+        person = Person.objects.create(alias="PX")
+        Appointment.objects.create(person=person, worktag=fund, start_date=dt.date(2027, 3, 1),
+                                   end_date=dt.date(2027, 4, 30), monthly_salary=Decimal("1000"))
+        for day in (dt.date(2027, 3, 15), dt.date(2027, 8, 1)):
+            s = summarize_fund(fund, today=day)
+            self.assertEqual((s.start_date, s.end_date), (dt.date(2026, 7, 1), expiry))
+            self.assertEqual(s.period_label, "FY2027")
+            self.assertEqual(s.total.budget, Decimal("5000.00"))
+            self.assertEqual(s.total.actual, Decimal("250.00"))
+            self.assertEqual(s.total.planned, Decimal("1000.00"))
+
     def test_state_fund_warns_about_money_that_will_lapse(self):
         fund = Worktag.objects.create(code="CC1", name="Department", type=WorktagType.STATE)
         Funding.objects.create(worktag=fund, date=dt.date(2026, 8, 1), amount=Decimal("10000"))
@@ -226,6 +244,34 @@ class WorktagFormTests(TestCase):
         self.assertNotIn("amount", editing.fields)
         self.assertNotIn("funding_date", editing.fields)
 
+    def test_multiple_awards_can_be_saved_without_worktags_and_updated_later(self):
+        first = WorktagForm(self.data(code="", name="First award", amount="2000"))
+        second = WorktagForm(self.data(code="", name="Second award"))
+        self.assertTrue(first.is_valid(), first.errors)
+        self.assertTrue(second.is_valid(), second.errors)
+        first_fund, second_fund = first.save(), second.save()
+        self.assertIsNone(first_fund.code)
+        self.assertIsNone(second_fund.code)
+        self.assertEqual(first_fund.funding.get().amount, Decimal("2000"))
+        updated = WorktagForm(self.data(code="gf00012345", name="First award"), instance=first_fund)
+        self.assertTrue(updated.is_valid(), updated.errors)
+        updated.save()
+        first_fund.refresh_from_db()
+        self.assertEqual(first_fund.code, "GF00012345")
+        self.assertEqual(second_fund.display_code, "Second award")
+
+    def test_state_expiration_is_editable_and_shown_only_for_grants_and_state(self):
+        form = WorktagForm(self.data(type="state", code="CCNEW", end_date="2027-03-31"))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.save().end_date, dt.date(2027, 3, 31))
+        self.assertEqual(form.fields["end_date"].widget.attrs["data-when"], "type=grant,state")
+
+    def test_initial_state_allocation_cannot_be_after_expiration(self):
+        form = WorktagForm(self.data(type="state", code="CCLATE", amount="5000",
+                                     funding_date="2027-04-01", end_date="2027-03-31"))
+        self.assertFalse(form.is_valid())
+        self.assertIn("funding_date", form.errors)
+
     def test_code_prefixes_suggest_a_fund_type(self):
         self.assertEqual(describe_code("GR00012345", "")[0], WorktagType.GRANT)
         self.assertEqual(describe_code("GF00077777", "")[0], WorktagType.GIFT)
@@ -297,6 +343,18 @@ class FundPagesTests(TestCase):
         fund = Worktag.objects.get(code="DE777")
         self.assertRedirects(response, fund.get_absolute_url(), fetch_redirect_response=False)
         self.assertEqual(fund.funding.get().amount, Decimal("2000"))
+
+    def test_creating_award_without_worktag_shows_name_and_allows_editing(self):
+        response = self.client.post(reverse("ledger:fund_create"), {
+            "type": "gift", "code": "", "name": "Awaiting Workday", "amount": "2000",
+            "fa_rate": "0", "fa_actuals": "calculate", "is_active": "on",
+        })
+        fund = Worktag.objects.get(name="Awaiting Workday")
+        self.assertRedirects(response, fund.get_absolute_url(), fetch_redirect_response=False)
+        self.assertIsNone(fund.code)
+        self.assertContains(self.client.get(fund.get_absolute_url()), "Awaiting Workday")
+        self.assertContains(self.client.get(reverse("ledger:dashboard")), "Worktag pending")
+        self.assertContains(self.client.get(reverse("ledger:fund_edit", args=[fund.pk])), "Optional until Workday assigns one")
 
     def test_category_budgets_are_dropped_when_a_fund_is_not_a_grant(self):
         BudgetLine.objects.create(worktag=self.gift, category=Category.objects.get(code="travel"), amount=Decimal("500"))

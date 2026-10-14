@@ -113,7 +113,7 @@ class FundSummary:
     burn_months: int = 0  # how many complete months the burn rate averages over
     alerts: list[Alert] = field(default_factory=list)
     start_date: dt.date | None = None  # fiscal year start for state funds, else the award start
-    end_date: dt.date | None = None  # June 30 for state funds, else the award end
+    end_date: dt.date | None = None  # State fiscal year end or earlier expiration; otherwise award end
     period_label: str = ""  # "FY2027" for state funds
     has_category_budgets: bool = False
 
@@ -148,7 +148,7 @@ def summarize_fund(
     summarizing many funds at once, which saves two queries per fund."""
     today = today or timezone.localdate()
     prefetch_fund_data([worktag])
-    period_start, period_end = worktag.period(today)  # fiscal year for state funds, else (None, None)
+    period_start, period_end = worktag.period(today)  # state fiscal period, else (None, None)
     fund_start = period_start or worktag.start_date
     fund_end = period_end or worktag.end_date
     categories = categories if categories is not None else list(Category.objects.all())
@@ -382,7 +382,7 @@ def summarize_fund(
         burn_months=len(window),
         start_date=fund_start,
         end_date=fund_end,
-        period_label=f"FY{fiscal_year(today)}" if worktag.lapses_yearly else "",
+        period_label=f"FY{fiscal_year(period_start)}" if worktag.lapses_yearly else "",
         has_category_budgets=has_category_budgets,
     )
     meals = by_code.get("meals")

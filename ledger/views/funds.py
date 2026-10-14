@@ -108,7 +108,7 @@ def fund_form(request, pk=None):
                 worktag.budget_lines.all().delete()
         matched, _ = rematch_transactions()
         note = f" {matched} unassigned transactions matched to it." if matched else ""
-        messages.success(request, f"Saved {worktag.code}.{note}")
+        messages.success(request, f"Saved {worktag.code or worktag.name}.{note}")
         return redirect(worktag)
     return render(request, "ledger/fund_form.html", {"form": form, "budget_form": budget_form, "worktag": worktag})
 
@@ -136,7 +136,7 @@ def funding_delete(request, pk):
         return redirect(safe_next(request, worktag.get_absolute_url()))
     return confirm_page(
         request,
-        title=f"Delete the {entry.date:%b %-d, %Y} funding entry on {worktag.code}?",
+        title=f"Delete the {entry.date:%b %-d, %Y} funding entry on {worktag.display_code}?",
         cancel_url=safe_next(request, worktag.get_absolute_url()),
     )
 
@@ -145,7 +145,7 @@ def fund_delete(request, pk):
     worktag = get_object_or_404(Worktag, pk=pk)
     if request.method == "POST":
         moved = worktag.transactions.count()
-        code = worktag.code
+        code = worktag.display_code
         worktag.delete()
         note = f" {moved} transactions moved to Needs review." if moved else ""
         messages.success(request, f"Deleted {code}.{note}")
@@ -163,7 +163,7 @@ def fund_export(request, pk):
     summary = summarize_fund(worktag)
     today = timezone.localdate()
     response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{slugify(worktag.code) or "fund"}-{today}.csv"'
+    response["Content-Disposition"] = f'attachment; filename="{slugify(worktag.code or worktag.name) or "fund"}-{today}.csv"'
     writer = csv.writer(response)
     writer.writerow(map(csv_safe, ["Fund", worktag.code, worktag.name]))
     writer.writerow(["Start", summary.start_date or "", "End", summary.end_date or "", "F&A rate %", worktag.fa_rate])

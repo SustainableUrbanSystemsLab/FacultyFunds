@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{% if worktag %}Edit {{ worktag.code }}{% else %}Add fund{% endif %}{% endblock %}
+{% block title %}{% if worktag %}Edit {{ worktag.display_code }}{% else %}Add fund{% endif %}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{% if worktag %}Edit {{ worktag.code }}{% else %}Add fund{% endif %}</h1></div>
+<div class="page-head"><h1>{% if worktag %}Edit {{ worktag.display_code }}{% else %}Add fund{% endif %}</h1></div>
 <form method="post" class="stack">
   {% csrf_token %}
   {% if form.non_field_errors %}<div class="form-error">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
