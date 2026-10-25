@@ -116,6 +116,11 @@ class WorktagForm(forms.ModelForm):
 
 
 class FundingForm(forms.ModelForm):
+    years = forms.IntegerField(
+        label="Number of yearly payments", required=False, min_value=1, max_value=10, initial=1,
+        help_text="For money promised every year (e.g. 3 for $2,000 a year for 3 years). Adds one entry per year on the same date.",
+    )
+
     class Meta:
         model = Funding
         fields = ["date", "amount", "description"]
@@ -124,6 +129,30 @@ class FundingForm(forms.ModelForm):
             "amount": "Use a negative amount for money taken back.",
             "description": "For example: award, top-up, FY2027 allocation.",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:  # each yearly payment is its own entry once saved
+            del self.fields["years"]
+
+    def save_for(self, worktag) -> list[Funding]:
+        """Save the entry, plus one more per extra year when repeating yearly."""
+        entry = self.save(commit=False)
+        entry.worktag = worktag
+        years = self.cleaned_data.get("years") or 1
+        if years == 1:
+            entry.save()
+            return [entry]
+        entries = []
+        for n in range(years):
+            try:
+                date = entry.date.replace(year=entry.date.year + n)
+            except ValueError:  # Feb 29 in a non-leap year
+                date = entry.date.replace(year=entry.date.year + n, day=28)
+            label = f"year {n + 1} of {years}"
+            description = f"{entry.description} ({label})" if entry.description else label.capitalize()
+            entries.append(Funding.objects.create(worktag=worktag, amount=entry.amount, date=date, description=description))
+        return entries
 
 
 class BudgetForm(forms.Form):
