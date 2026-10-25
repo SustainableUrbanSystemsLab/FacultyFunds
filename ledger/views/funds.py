@@ -119,10 +119,9 @@ def funding_form(request, fund=None, pk=None):
     form = FundingForm(request.POST or None, instance=entry)
     next_url = safe_next(request, worktag.get_absolute_url())
     if request.method == "POST" and form.is_valid():
-        saved = form.save(commit=False)
-        saved.worktag = worktag
-        saved.save()
-        messages.success(request, "Funding saved.")
+        with db_transaction.atomic():
+            saved = form.save_for(worktag)
+        messages.success(request, "Funding saved." if len(saved) == 1 else f"{len(saved)} yearly funding entries saved.")
         return redirect(next_url)
     return render(request, "ledger/funding_form.html", {"form": form, "entry": entry, "worktag": worktag, "next": next_url})
 

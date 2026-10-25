@@ -344,6 +344,16 @@ class FundPagesTests(TestCase):
         self.client.post(reverse("ledger:funding_delete", args=[entry.pk]))
         self.assertFalse(Funding.objects.filter(pk=entry.pk).exists())
 
+    def test_yearly_funding_adds_one_entry_per_year(self):
+        url = reverse("ledger:funding_create", args=[self.gift.pk])
+        self.client.post(url, {"date": "2028-02-29", "amount": "2000", "description": "Fellowship", "years": "3"})
+        entries = list(self.gift.funding.filter(description__startswith="Fellowship").order_by("date"))
+        self.assertEqual([e.date for e in entries], [dt.date(2028, 2, 29), dt.date(2029, 2, 28), dt.date(2030, 2, 28)])
+        self.assertEqual([e.amount for e in entries], [Decimal("2000")] * 3)
+        self.assertEqual(entries[2].description, "Fellowship (year 3 of 3)")
+        edit = self.client.get(reverse("ledger:funding_edit", args=[entries[0].pk]))
+        self.assertNotContains(edit, "yearly payments")
+
     def test_creating_a_fund_through_the_form_records_the_amount(self):
         response = self.client.post(reverse("ledger:fund_create"), {
             "type": "gift", "code": "de777", "name": "Gift", "fa_rate": "0", "fa_actuals": "calculate",
